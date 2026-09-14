@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">OTT</string>
+    <string name="browse_title">OTT</string>
+    <string name="row_trending_now">Trending Now</string>
+
+    <string name="nav_home">Home</string>
+    <string name="nav_search">Search</string>
+    <string name="nav_movies">Movies</string>
+    <string name="nav_shows">TV Shows</string>
+    <string name="nav_profile">Profile</string>
+</resources>

@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/screen_scrim">
+
+    <FrameLayout
+        android:id="@+id/main_browse_fragment"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginStart="88dp" />
+
+    <FrameLayout
+        android:id="@+id/nav_container"
+        android:layout_width="88dp"
+        android:layout_height="match_parent">
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/nav_panel_bg" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:paddingStart="16dp"
+            android:paddingTop="24dp">
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="16dp" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:id="@+id/nav_home"
+                    style="@style/SideNavItem"
+                    android:contentDescription="@string/nav_home"
+                    android:src="@drawable/ic_nav_home"
+                    android:tint="@color/nav_icon_tint" />
+
+                <TextView
+                    android:id="@+id/nav_home_label"
+                    style="@style/SideNavLabel"
+                    android:text="@string/nav_home" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:id="@+id/nav_search"
+                    style="@style/SideNavItem"
+                    android:contentDescription="@string/nav_search"
+                    android:src="@drawable/ic_nav_search"
+                    android:tint="@color/nav_icon_tint" />
+
+                <TextView
+                    android:id="@+id/nav_search_label"
+                    style="@style/SideNavLabel"
+                    android:text="@string/nav_search" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:id="@+id/nav_movies"
+                    style="@style/SideNavItem"
+                    android:contentDescription="@string/nav_movies"
+                    android:src="@drawable/ic_nav_movies"
+                    android:tint="@color/nav_icon_tint" />
+
+                <TextView
+                    android:id="@+id/nav_movies_label"
+                    style="@style/SideNavLabel"
+                    android:text="@string/nav_movies" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:id="@+id/nav_shows"
+                    style="@style/SideNavItem"
+                    android:contentDescription="@string/nav_shows"
+                    android:src="@drawable/ic_nav_shows"
+                    android:tint="@color/nav_icon_tint" />
+
+                <TextView
+                    android:id="@+id/nav_shows_label"
+                    style="@style/SideNavLabel"
+                    android:text="@string/nav_shows" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="28dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:id="@+id/nav_profile"
+                    style="@style/SideNavItem"
+                    android:contentDescription="@string/nav_profile"
+                    android:src="@drawable/ic_nav_profile"
+                    android:tint="@color/nav_icon_tint" />
+
+                <TextView
+                    android:id="@+id/nav_profile_label"
+                    style="@style/SideNavLabel"
+                    android:text="@string/nav_profile" />
+            </LinearLayout>
+        </LinearLayout>
+    </FrameLayout>
+</FrameLayout>

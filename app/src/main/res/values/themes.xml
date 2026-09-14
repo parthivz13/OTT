@@ -1,0 +1,13 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme, rooted in Leanback's TV browse theme. -->
+    <style name="Base.Theme.OTT" parent="Theme.Leanback">
+        <item name="browseRowsMarginTop">0dp</item>
+        <item name="rowsVerticalGridStyle">@style/OTT.Rows.VerticalGridView</item>
+    </style>
+
+    <style name="OTT.Rows.VerticalGridView" parent="Widget.Leanback.Rows.VerticalGridView">
+        <item name="android:paddingTop">0dp</item>
+    </style>
+
+    <style name="Theme.OTT" parent="Base.Theme.OTT" />
+</resources>
