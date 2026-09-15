@@ -118,7 +118,7 @@ class MainBrowseFragment : BrowseSupportFragment() {
         val spotlight = groups.firstOrNull()
         spotlight?.let {
             val heroAdapter = ArrayObjectAdapter().apply {
-                addAll(0, it.items)
+                addAll(0, it.items.take(HERO_CAROUSEL_ASSET_LIMIT))
             }
             val header = HeaderItem(HERO_ROW_ID, it.title)
             rowsAdapter.add(HeroCarouselRow(header, heroAdapter))
@@ -163,5 +163,6 @@ class MainBrowseFragment : BrowseSupportFragment() {
         private const val TAG = "MainBrowseFragment"
         private const val BACKGROUND_UPDATE_DELAY_MS = 300L
         private const val HERO_ROW_ID = -1L
+        private const val HERO_CAROUSEL_ASSET_LIMIT = 4
     }
 }

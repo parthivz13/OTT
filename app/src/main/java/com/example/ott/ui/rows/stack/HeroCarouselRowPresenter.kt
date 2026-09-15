@@ -46,26 +46,38 @@ class HeroCarouselRowPresenter : RowPresenter() {
         private const val DOT_ACTIVE_WIDTH_DP = 22
         private const val DOT_SPACING_DP = 4
 
-        // How many upcoming slides peek past the current card's right edge - real Jio Hotstar
-        // renders more than this in its underlying RecyclerView, but only ~2 are ever actually
-        // visible before clipping off the row; 3 gives a bit of extra depth. Minimum of 2 keeps
-        // the layered-stack look recognizable - a single peek reads as a mistake, not a stack.
-        private const val PEEK_COUNT = 3
+        // Upper bound on how many upcoming slides peek past the current card's right edge - real
+        // Jio Hotstar renders more than this in its underlying RecyclerView, but only ~2 are ever
+        // actually visible before clipping off the row; 3 gives a bit of extra depth. [renderPeeks]
+        // hides any peek beyond the slides a row actually has, so a short row never shows empty
+        // placeholder cards even though this many views are always built up front.
+        private const val PEEK_COUNT_MAX = 3
 
-        // Each peek is a narrow SLIVER (not a shrunk-down mini replica of the full card), sized as
-        // this fraction of the CURRENT card's own width/height, measured off the live Jio Hotstar
-        // app: peek depth 1 is ~23.5%w / ~87%h, depth 2 is ~24.5%w / ~74%h. Depth 3 continues the
-        // same step (mostly clipped by hero_stack's edge, same as the real app).
-        private val PEEK_WIDTH_RATIO = floatArrayOf(0.235f, 0.245f, 0.245f)
-        private val PEEK_HEIGHT_RATIO = floatArrayOf(0.87f, 0.74f, 0.61f)
-        // Each peek's top edge steps down from the main card's own top, as a fraction of the
-        // current card's height - paired with the height shrink above so the bottom edge also
-        // rises slightly per depth, matching the real app's step pattern.
-        private val PEEK_TOP_SHIFT_RATIO = floatArrayOf(0.066f, 0.128f, 0.19f)
+        // Each successive peek is a genuinely SMALLER card (not a same-size card just clipped),
+        // sized as this fraction of the ACTIVE card's own width/height - measured directly off a
+        // real Jio Hotstar screenshot: peek depth 1 is ~77%w / ~87%h, depth 2 is ~54%w / ~74%h.
+        // Depth 3 continues the same step.
+        private val PEEK_WIDTH_RATIO = floatArrayOf(0.77f, 0.54f, 0.40f)
+        private val PEEK_HEIGHT_RATIO = floatArrayOf(0.87f, 0.74f, 0.62f)
+        // How far each peek's start edge shifts right from the active card's own left edge, as a
+        // fraction of the active card's width. Each peek's RIGHT edge (shift + its own width
+        // ratio above) must clear the previous card's right edge, or the correct z-order (each
+        // peek drawn below/behind the previous one, see populatePeekViews) would let the bigger
+        // card in front fully cover the smaller one behind it - peek1 spans [1.00, 1.77], so
+        // peek2 needs its right edge past 1.77 (spans [1.30, 1.84]), and peek3's past 1.84
+        // (spans [1.55, 1.95]).
+        private val PEEK_START_SHIFT_RATIO = floatArrayOf(1.00f, 1.30f, 1.55f)
+        // Matches CrossfadeImagePair's own crossfade length, so a peek's card-level fade-in and
+        // its backdrop image's crossfade (loaded in the same [renderPeeks] pass) finish together.
+        private const val PEEK_FADE_DURATION_MS = 220L
     }
 
-    /** One dynamically-built peek layer: the whole card that recedes further as [depth] grows. */
-    class PeekViewHolder(val card: CardView, val images: CrossfadeImagePair)
+    /** One dynamically-built peek layer: the whole card that recedes further as [depth] grows.
+     * [boundTitleId] tracks which title is currently shown so [renderPeeks] only fades the card
+     * in when the title it's showing actually changes, not on every redundant re-render. */
+    class PeekViewHolder(val card: CardView, val images: CrossfadeImagePair) {
+        var boundTitleId: Int? = null
+    }
 
     class ViewHolder(rootView: View) : RowPresenter.ViewHolder(rootView) {
         val card: CardView = rootView.findViewById(R.id.hero_card)
@@ -167,14 +179,15 @@ class HeroCarouselRowPresenter : RowPresenter() {
 
     private fun currentItem(holder: ViewHolder): Any? = holder.adapter?.get(holder.selectedIndex)
 
-    /** Builds [PEEK_COUNT] peek cards into [ViewHolder.peekContainer], nearest-to-farthest, each
-     * a genuinely smaller card than the last (see the ratio tables above, derived from real Jio
-     * Hotstar measurements) rather than a full-size card merely clipped to look smaller. Sizing
-     * depends on the current card's own width, which is only known once it has been laid out to
-     * its final size - `doOnLayout` (unlike a one-shot ViewTreeObserver listener removed after
-     * its first, possibly-premature firing) guarantees the callback runs after a genuine layout
-     * pass with real measurements, so peek sizing can't be computed off a transient 0/undersized
-     * pass. Built once per row view and reused across every subsequent bind/slide change. */
+    /** Builds up to [PEEK_COUNT_MAX] peek cards into [ViewHolder.peekContainer], nearest-to-
+     * farthest, each a genuinely smaller card than the active one (see the ratio tables above,
+     * measured off a real Jio Hotstar screenshot) rather than a full-size card merely clipped to
+     * look smaller. Sizing depends on the active card's own width, which is only known once it
+     * has been laid out to its final size - `doOnLayout` (unlike a one-shot ViewTreeObserver
+     * listener removed after its first, possibly-premature firing) guarantees the callback runs
+     * after a genuine layout pass with real measurements, so peek sizing can't be computed off a
+     * transient 0/undersized pass. Built once per row view and reused across every subsequent
+     * bind/slide change. */
     private fun buildPeekViews(holder: ViewHolder) {
         holder.card.doOnLayout {
             val cardWidth = holder.card.width
@@ -189,12 +202,17 @@ class HeroCarouselRowPresenter : RowPresenter() {
         val context = holder.peekContainer.context
         val density = context.resources.displayMetrics.density
         // hero_peek_container and hero_card share the same left edge (both match_parent, no
-        // start margin), so the card's own right edge sits at cardWidth in the container's
-        // coordinate space - each peek starts exactly there (or where the previous peek ended),
-        // butted edge-to-edge with zero gap, matching the real app (verified live: peek1's right
-        // edge and peek2's left edge sit flush with no visible margin between them).
-        var nextStart = cardWidth
-        for (i in 0 until PEEK_COUNT) {
+        // start margin), so the active card's own left edge is at marginStart=0. Each peek is a
+        // genuinely smaller card (see the ratio tables above), shifted right and vertically
+        // centered against the active card - measured off a real screenshot, a peek's top and
+        // bottom insets from the active card's edges are equal, confirming CENTER_VERTICAL, not
+        // top-alignment. Z-index must mirror carousel position - active card on top, peek1 below
+        // it, peek2 below peek1, and so on. FrameLayout draws children in ascending child-index
+        // order (index 0 draws first/lowest, the highest index draws last/on top), so each new
+        // peek is inserted at index 0 - pushing every peek added before it (which must stay
+        // visually on top) up in z-order - rather than appended, which would put the farthest,
+        // smallest peek on top instead.
+        for (i in 0 until PEEK_COUNT_MAX) {
             val card = CardView(context).apply {
                 radius = 14f * density
                 setCardBackgroundColor(context.getColor(R.color.banner_background))
@@ -202,11 +220,9 @@ class HeroCarouselRowPresenter : RowPresenter() {
             }
             val peekWidth = (cardWidth * PEEK_WIDTH_RATIO[i]).toInt()
             val peekHeight = (cardHeight * PEEK_HEIGHT_RATIO[i]).toInt()
-            val params = FrameLayout.LayoutParams(peekWidth, peekHeight, android.view.Gravity.TOP)
-            params.marginStart = nextStart
-            params.topMargin = (cardHeight * PEEK_TOP_SHIFT_RATIO[i]).toInt()
+            val params = FrameLayout.LayoutParams(peekWidth, peekHeight, android.view.Gravity.CENTER_VERTICAL)
+            params.marginStart = (cardWidth * PEEK_START_SHIFT_RATIO[i]).toInt()
             card.layoutParams = params
-            nextStart += peekWidth
 
             val imageContainer = FrameLayout(context)
             card.addView(
@@ -215,7 +231,7 @@ class HeroCarouselRowPresenter : RowPresenter() {
             )
             val images = CrossfadeImagePair(imageContainer)
 
-            holder.peekContainer.addView(card)
+            holder.peekContainer.addView(card, 0)
             holder.peeks.add(PeekViewHolder(card, images))
         }
         // Peeks are built asynchronously after the first layout pass, so re-apply whatever slide
@@ -251,14 +267,32 @@ class HeroCarouselRowPresenter : RowPresenter() {
      * Jio Hotstar's layered hero banner: every visible peek shows its title's actual (dimmed)
      * backdrop art, not just the nearest one - real content throughout the stack, like the real
      * app. Images load from Glide's memory cache instantly here in the common case, since
-     * [preloadUpcoming] already fetched them while this same item was still a peek itself. */
+     * [preloadUpcoming] already fetched them while this same item was still a peek itself.
+     *
+     * This is also what makes the peek count dynamic despite [PEEK_COUNT_MAX] built-up-front
+     * views: a peek past the last real slide (row has fewer titles left than [PEEK_COUNT_MAX])
+     * gets no item back from [itemAt] and is hidden here instead of showing an empty card. */
     private fun renderPeeks(holder: ViewHolder, adapter: ObjectAdapter, index: Int) {
         holder.peeks.forEachIndexed { i, peek ->
             val depth = i + 1
             val peekItem = itemAt(adapter, index + depth)
-            peek.card.visibility = if (peekItem != null) View.VISIBLE else View.INVISIBLE
-            if (peekItem == null) return@forEachIndexed
+            if (peekItem == null) {
+                peek.card.animate().cancel()
+                peek.card.visibility = View.INVISIBLE
+                peek.boundTitleId = null
+                return@forEachIndexed
+            }
+            val isNewTitle = peek.boundTitleId != peekItem.id
+            peek.boundTitleId = peekItem.id
             loadBackdrop(peek.images, peekItem)
+            if (!isNewTitle && peek.card.visibility == View.VISIBLE) return@forEachIndexed
+            // A peek stepping into a new depth (or appearing for the first time) fades its whole
+            // card in from transparent, matching the real app's stack-shift animation - not just
+            // an instant visibility flip, and not just the backdrop image crossfading underneath.
+            peek.card.animate().cancel()
+            peek.card.alpha = 0f
+            peek.card.visibility = View.VISIBLE
+            peek.card.animate().alpha(1f).setDuration(PEEK_FADE_DURATION_MS).start()
         }
     }
 
@@ -281,7 +315,7 @@ class HeroCarouselRowPresenter : RowPresenter() {
      * instead of showing the flat placeholder color while it loads. */
     private fun preloadUpcoming(holder: ViewHolder, adapter: ObjectAdapter, index: Int) {
         val context = holder.peekContainer.context
-        val preloadRange = (index - 1)..(index + PEEK_COUNT + 1)
+        val preloadRange = (index - 1)..(index + PEEK_COUNT_MAX + 1)
         for (i in preloadRange) {
             if (i == index) continue
             val url = itemAt(adapter, i)?.backdropUrl ?: continue
