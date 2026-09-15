@@ -48,10 +48,10 @@ class HeroCarouselRowPresenter : RowPresenter() {
 
         // Upper bound on how many upcoming slides peek past the current card's right edge - real
         // Jio Hotstar renders more than this in its underlying RecyclerView, but only ~2 are ever
-        // actually visible before clipping off the row; 3 gives a bit of extra depth. [renderPeeks]
-        // hides any peek beyond the slides a row actually has, so a short row never shows empty
-        // placeholder cards even though this many views are always built up front.
-        private const val PEEK_COUNT_MAX = 3
+        // actually visible before clipping off the row. [renderPeeks] hides any peek beyond the
+        // slides a row actually has, so a short row never shows empty placeholder cards even
+        // though this many views are always built up front.
+        private const val PEEK_COUNT_MAX = 2
 
         // Each successive peek is a genuinely SMALLER card (not a same-size card just clipped),
         // sized as this fraction of the ACTIVE card's own width/height - measured directly off a
@@ -60,9 +60,9 @@ class HeroCarouselRowPresenter : RowPresenter() {
         private val PEEK_WIDTH_RATIO = floatArrayOf(0.77f, 0.54f, 0.40f)
         private val PEEK_HEIGHT_RATIO = floatArrayOf(0.87f, 0.74f, 0.62f)
         // How far each peek's start edge shifts right from the ACTIVE CARD'S OWN start edge, as
-        // a constant dp step per depth (not a fraction of card width) - peek1 sits 180dp right of
-        // the active card's left edge, peek2 180dp right of peek1's position, and so on.
-        private const val PEEK_SHIFT_STEP_DP = 180f
+        // a constant dp step per depth (not a fraction of card width) - peek1 sits 230dp right of
+        // the active card's left edge, peek2 230dp right of peek1's position, and so on.
+        private const val PEEK_SHIFT_STEP_DP = 230f
         // Matches CrossfadeImagePair's own crossfade length, so a peek's card-level fade-in and
         // its backdrop image's crossfade (loaded in the same [renderPeeks] pass) finish together.
         private const val PEEK_FADE_DURATION_MS = 220L
