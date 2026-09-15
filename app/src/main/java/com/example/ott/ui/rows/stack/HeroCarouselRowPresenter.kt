@@ -59,14 +59,10 @@ class HeroCarouselRowPresenter : RowPresenter() {
         // Depth 3 continues the same step.
         private val PEEK_WIDTH_RATIO = floatArrayOf(0.77f, 0.54f, 0.40f)
         private val PEEK_HEIGHT_RATIO = floatArrayOf(0.87f, 0.74f, 0.62f)
-        // How far each peek's start edge shifts right from the active card's own left edge, as a
-        // fraction of the active card's width. Each peek's RIGHT edge (shift + its own width
-        // ratio above) must clear the previous card's right edge, or the correct z-order (each
-        // peek drawn below/behind the previous one, see populatePeekViews) would let the bigger
-        // card in front fully cover the smaller one behind it - peek1 spans [1.00, 1.77], so
-        // peek2 needs its right edge past 1.77 (spans [1.30, 1.84]), and peek3's past 1.84
-        // (spans [1.55, 1.95]).
-        private val PEEK_START_SHIFT_RATIO = floatArrayOf(1.00f, 1.30f, 1.55f)
+        // How far each peek's start edge shifts right from the ACTIVE CARD'S OWN start edge, as
+        // a constant dp step per depth (not a fraction of card width) - peek1 sits 180dp right of
+        // the active card's left edge, peek2 180dp right of peek1's position, and so on.
+        private const val PEEK_SHIFT_STEP_DP = 180f
         // Matches CrossfadeImagePair's own crossfade length, so a peek's card-level fade-in and
         // its backdrop image's crossfade (loaded in the same [renderPeeks] pass) finish together.
         private const val PEEK_FADE_DURATION_MS = 220L
@@ -203,16 +199,19 @@ class HeroCarouselRowPresenter : RowPresenter() {
         val density = context.resources.displayMetrics.density
         // hero_peek_container and hero_card share the same left edge (both match_parent, no
         // start margin), so the active card's own left edge is at marginStart=0. Each peek is a
-        // genuinely smaller card (see the ratio tables above), shifted right and vertically
-        // centered against the active card - measured off a real screenshot, a peek's top and
-        // bottom insets from the active card's edges are equal, confirming CENTER_VERTICAL, not
-        // top-alignment. Z-index must mirror carousel position - active card on top, peek1 below
-        // it, peek2 below peek1, and so on. FrameLayout draws children in ascending child-index
-        // order (index 0 draws first/lowest, the highest index draws last/on top), so each new
-        // peek is inserted at index 0 - pushing every peek added before it (which must stay
-        // visually on top) up in z-order - rather than appended, which would put the farthest,
-        // smallest peek on top instead.
+        // genuinely smaller card (see the ratio tables above), shifted right from THAT edge and
+        // vertically centered against the active card - measured off a real screenshot, a peek's
+        // top and bottom insets from the active card's edges are equal, confirming
+        // CENTER_VERTICAL, not top-alignment. peek1 sits 100dp right of the active card's own left
+        // edge, peek2 100dp right of peek1's position, and so on. Z-index must mirror carousel
+        // position - active card on top, peek1 below it, peek2 below peek1, and so on. FrameLayout
+        // draws children in ascending child-index order (index 0 draws first/lowest, the highest
+        // index draws last/on top), so each new peek is inserted at index 0 - pushing every peek
+        // added before it (which must stay visually on top) up in z-order - rather than appended,
+        // which would put the farthest, smallest peek on top instead.
+        val shiftStepPx = (PEEK_SHIFT_STEP_DP * density).toInt()
         for (i in 0 until PEEK_COUNT_MAX) {
+            val depth = i + 1
             val card = CardView(context).apply {
                 radius = 14f * density
                 setCardBackgroundColor(context.getColor(R.color.banner_background))
@@ -221,7 +220,7 @@ class HeroCarouselRowPresenter : RowPresenter() {
             val peekWidth = (cardWidth * PEEK_WIDTH_RATIO[i]).toInt()
             val peekHeight = (cardHeight * PEEK_HEIGHT_RATIO[i]).toInt()
             val params = FrameLayout.LayoutParams(peekWidth, peekHeight, android.view.Gravity.CENTER_VERTICAL)
-            params.marginStart = (cardWidth * PEEK_START_SHIFT_RATIO[i]).toInt()
+            params.marginStart = shiftStepPx * depth
             card.layoutParams = params
 
             val imageContainer = FrameLayout(context)
