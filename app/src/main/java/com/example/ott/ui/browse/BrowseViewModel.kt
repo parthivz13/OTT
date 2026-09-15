@@ -22,8 +22,7 @@ class BrowseViewModel : ViewModel() {
     init {
         Log.d(TAG, "init: fetching shows")
         viewModelScope.launch {
-            // Falls back to a small offline sample list if the network call fails (e.g. no
-            // internet on the emulator/device), so the rails still have content to render.
+            // Falls back to offline sample data on failure so the rails still have content.
             val result = runCatching { repository.getShows() }
             result.exceptionOrNull()?.let { Log.w(TAG, "tvmaze fetch failed, using fallback", it) }
             val titles = result.getOrNull()?.takeIf { it.isNotEmpty() } ?: SampleTitles.fallback

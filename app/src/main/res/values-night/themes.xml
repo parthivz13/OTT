@@ -1,6 +1,5 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Leanback's TV browse theme is already dark by default. -->
     <style name="Base.Theme.OTT" parent="Theme.Leanback">
-        <!-- Customize your dark theme here. -->
     </style>
 </resources>

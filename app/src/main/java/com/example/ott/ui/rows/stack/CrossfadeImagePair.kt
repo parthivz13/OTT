@@ -13,16 +13,8 @@ import com.bumptech.glide.load.engine.GlideException
 import com.bumptech.glide.request.RequestListener
 import com.bumptech.glide.request.target.Target
 
-/**
- * Two stacked ImageViews inside [container], loaded independently and crossfaded via
- * [View.animate] alpha rather than Glide's Drawable-level crossfade. Reusing a live Drawable
- * Glide handed to one request as the placeholder for the next (e.g. `imageView.drawable`) is a
- * known Glide anti-pattern: the underlying Bitmap can be recycled back into Glide's pool by a
- * newer request while a View still holds a reference to it, crashing with "Canvas: trying to use
- * a recycled bitmap" under rapid navigation. Keeping every load on its own View sidesteps that
- * entirely - there's no Drawable reused across requests, so there's nothing to recycle out from
- * under a still-visible frame.
- */
+// Two stacked ImageViews, crossfaded via alpha instead of reusing a Drawable across Glide
+// requests - avoids "Canvas: trying to use a recycled bitmap" under rapid navigation.
 class CrossfadeImagePair(container: FrameLayout, private val durationMs: Long = 220L) {
 
     private val front = ImageView(container.context).apply { scaleType = ImageView.ScaleType.CENTER_CROP }
@@ -38,7 +30,6 @@ class CrossfadeImagePair(container: FrameLayout, private val durationMs: Long = 
         container.addView(front, params)
     }
 
-    /** Loads [url] into whichever view is currently hidden, then crossfades it to the front. */
     fun load(url: String) {
         val incoming = if (showingFront) back else front
         val outgoing = if (showingFront) front else back
@@ -73,7 +64,6 @@ class CrossfadeImagePair(container: FrameLayout, private val durationMs: Long = 
             .into(incoming)
     }
 
-    /** Shows a flat color instantly (no crossfade) - used when a title has no backdrop art. */
     fun setColor(color: Int) {
         val incoming = if (showingFront) back else front
         val outgoing = if (showingFront) front else back

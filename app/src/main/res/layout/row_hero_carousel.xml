@@ -19,15 +19,7 @@
         android:clipChildren="true"
         android:clipToPadding="false">
 
-        <!-- Peeking upcoming slides, Jio Hotstar-style: real measurements taken from a live
-             screenshot show each successive peek card is a genuinely SMALLER card (not a
-             same-size card merely clipped to look smaller) - peek1 is ~77%w / ~87%h of the active
-             card, peek2 is ~54%w / ~74%h, each vertically centered against the active card.
-             Horizontal position is a constant 180dp step per depth from the active card's own
-             left edge (peek1 = active + 180dp, peek2 = peek1 + 180dp, ...), partially clipped by
-             hero_stack's right bound (clipChildren=true on this container only). Peek cards are
-             built and sized programmatically by HeroCarouselRowPresenter off hero_card's own
-             measured size, and show each upcoming title's real backdrop art. -->
+        <!-- Peek cards are built and positioned programmatically by HeroCarouselRowPresenter. -->
         <FrameLayout
             android:id="@+id/hero_peek_container"
             android:layout_width="match_parent"
