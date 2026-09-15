@@ -188,12 +188,12 @@ class HeroCarouselRowPresenter : RowPresenter() {
         if (holder.peeks.isNotEmpty()) return
         val context = holder.peekContainer.context
         val density = context.resources.displayMetrics.density
-        val gap = (8f * density).toInt()
         // hero_peek_container and hero_card share the same left edge (both match_parent, no
         // start margin), so the card's own right edge sits at cardWidth in the container's
-        // coordinate space - each peek starts there (or after the previous peek), giving the
-        // real app's edge-to-edge sliver stack instead of overlapping shrunk-down cards.
-        var nextStart = cardWidth + gap
+        // coordinate space - each peek starts exactly there (or where the previous peek ended),
+        // butted edge-to-edge with zero gap, matching the real app (verified live: peek1's right
+        // edge and peek2's left edge sit flush with no visible margin between them).
+        var nextStart = cardWidth
         for (i in 0 until PEEK_COUNT) {
             val card = CardView(context).apply {
                 radius = 14f * density
@@ -206,7 +206,7 @@ class HeroCarouselRowPresenter : RowPresenter() {
             params.marginStart = nextStart
             params.topMargin = (cardHeight * PEEK_TOP_SHIFT_RATIO[i]).toInt()
             card.layoutParams = params
-            nextStart += peekWidth + gap
+            nextStart += peekWidth
 
             val imageContainer = FrameLayout(context)
             card.addView(
