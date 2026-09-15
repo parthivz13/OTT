@@ -13,3 +13,7 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Debug screenshots/dumps pulled from the emulator during development
+/*.png
+/*.txt
