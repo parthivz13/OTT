@@ -20,13 +20,13 @@
         android:clipToPadding="false">
 
         <!-- Peeking upcoming slides, Jio Hotstar-style: real measurements taken from the live app
-             show each successive peek card is a genuinely SMALLER card (not a same-size card
-             clipped to look smaller) - peek1 is ~77% width / ~87.5% height of the current card,
-             peek2 is ~54% width / ~75% height, each vertically centered and shifted further
-             right, partially clipped by hero_stack's right bound (clipChildren=true on this
-             container only). Peek cards are built and sized programmatically by
-             HeroCarouselRowPresenter off the current card's own measured size (count is
-             configurable, minimum 2), and show each upcoming title's real backdrop art. -->
+             show each peek is a narrow SLIVER (~23-25% of the current card's own width, not a
+             shrunk-down mini replica of it) placed edge-to-edge right after the previous card/peek,
+             stepping down slightly in both top offset and height per depth. Peek2+ extend past
+             hero_stack's right bound and get naturally cropped by its clipChildren=true, matching
+             how the real app's peeks run off the row's edge. Peek cards are built and sized
+             programmatically by HeroCarouselRowPresenter off the current card's own measured size
+             (count is configurable, minimum 2), and show each upcoming title's real backdrop art. -->
         <FrameLayout
             android:id="@+id/hero_peek_container"
             android:layout_width="match_parent"
@@ -36,7 +36,7 @@
             android:id="@+id/hero_card"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:layout_marginEnd="94dp"
+            android:layout_marginEnd="280dp"
             android:focusable="true"
             android:focusableInTouchMode="true"
             app:cardBackgroundColor="@color/banner_background"

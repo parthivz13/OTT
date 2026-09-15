@@ -52,14 +52,16 @@ class HeroCarouselRowPresenter : RowPresenter() {
         // the layered-stack look recognizable - a single peek reads as a mistake, not a stack.
         private const val PEEK_COUNT = 3
 
-        // Each successive peek is a genuinely SMALLER card (not a same-size card just clipped
-        // more), sized as this fraction of the CURRENT card's own width/height, measured off the
-        // live Jio Hotstar app: peek depth 1 is ~77%w / ~87.5%h, depth 2 is ~54%w / ~75%h.
-        private val PEEK_WIDTH_RATIO = floatArrayOf(0.771f, 0.537f, 0.40f)
-        private val PEEK_HEIGHT_RATIO = floatArrayOf(0.875f, 0.750f, 0.65f)
-        // How far each peek's start edge shifts right, as a fraction of the current card's width
-        // - increasing per depth so cards visibly stagger rather than stacking on the same edge.
-        private val PEEK_START_SHIFT_RATIO = floatArrayOf(0.30f, 0.52f, 0.70f)
+        // Each peek is a narrow SLIVER (not a shrunk-down mini replica of the full card), sized as
+        // this fraction of the CURRENT card's own width/height, measured off the live Jio Hotstar
+        // app: peek depth 1 is ~23.5%w / ~87%h, depth 2 is ~24.5%w / ~74%h. Depth 3 continues the
+        // same step (mostly clipped by hero_stack's edge, same as the real app).
+        private val PEEK_WIDTH_RATIO = floatArrayOf(0.235f, 0.245f, 0.245f)
+        private val PEEK_HEIGHT_RATIO = floatArrayOf(0.87f, 0.74f, 0.61f)
+        // Each peek's top edge steps down from the main card's own top, as a fraction of the
+        // current card's height - paired with the height shrink above so the bottom edge also
+        // rises slightly per depth, matching the real app's step pattern.
+        private val PEEK_TOP_SHIFT_RATIO = floatArrayOf(0.066f, 0.128f, 0.19f)
     }
 
     /** One dynamically-built peek layer: the whole card that recedes further as [depth] grows. */
@@ -186,6 +188,12 @@ class HeroCarouselRowPresenter : RowPresenter() {
         if (holder.peeks.isNotEmpty()) return
         val context = holder.peekContainer.context
         val density = context.resources.displayMetrics.density
+        val gap = (8f * density).toInt()
+        // hero_peek_container and hero_card share the same left edge (both match_parent, no
+        // start margin), so the card's own right edge sits at cardWidth in the container's
+        // coordinate space - each peek starts there (or after the previous peek), giving the
+        // real app's edge-to-edge sliver stack instead of overlapping shrunk-down cards.
+        var nextStart = cardWidth + gap
         for (i in 0 until PEEK_COUNT) {
             val card = CardView(context).apply {
                 radius = 14f * density
@@ -194,9 +202,11 @@ class HeroCarouselRowPresenter : RowPresenter() {
             }
             val peekWidth = (cardWidth * PEEK_WIDTH_RATIO[i]).toInt()
             val peekHeight = (cardHeight * PEEK_HEIGHT_RATIO[i]).toInt()
-            val params = FrameLayout.LayoutParams(peekWidth, peekHeight, android.view.Gravity.CENTER_VERTICAL)
-            params.marginStart = (cardWidth * PEEK_START_SHIFT_RATIO[i]).toInt()
+            val params = FrameLayout.LayoutParams(peekWidth, peekHeight, android.view.Gravity.TOP)
+            params.marginStart = nextStart
+            params.topMargin = (cardHeight * PEEK_TOP_SHIFT_RATIO[i]).toInt()
             card.layoutParams = params
+            nextStart += peekWidth + gap
 
             val imageContainer = FrameLayout(context)
             card.addView(
