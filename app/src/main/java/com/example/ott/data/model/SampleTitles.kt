@@ -1,9 +1,6 @@
 package com.example.ott.data.model
 
-/**
- * Offline fallback used when no TMDB API key is configured (or the network call fails), so the
- * stack carousel has something to render for local testing without hitting the network.
- */
+// Fallback data when no TMDB API key is configured or the network call fails.
 object SampleTitles {
     val fallback: List<Title> = listOf(
         Title(1, "Stranger Things", "", null, null, 8.6, "tv", "2025", "Sci-Fi", "Newly Added"),

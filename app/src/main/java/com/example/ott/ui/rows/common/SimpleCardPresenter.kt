@@ -10,8 +10,7 @@ import com.bumptech.glide.Glide
 import com.example.ott.R
 import com.example.ott.data.model.Title
 
-/** Plain poster card for standard (non-overlapping) rails - image + title below. On focus, shows
- * only a white ring around the poster; no scaling, so nothing overlaps neighboring rows. */
+// No focus scaling, unlike the hero cards - keeps neighboring rows from overlapping.
 class SimpleCardPresenter : Presenter() {
 
     class ViewHolder(view: View) : Presenter.ViewHolder(view) {

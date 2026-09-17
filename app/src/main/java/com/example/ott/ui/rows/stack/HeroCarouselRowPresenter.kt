@@ -18,23 +18,16 @@ import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.example.ott.R
 import com.example.ott.data.model.Title
 
-/**
- * Renders a [HeroCarouselRow] as a Jio Hotstar-style spotlight banner: one full-bleed slide at a
- * time (no fanned/scaled stack), swapped instantly on D-pad left/right with a dot-strip position
- * indicator below - matching the real app's observed behavior (see presenter methods for the
- * exact boundary rules, verified against the live Jio Hotstar TV app).
- */
+// Jio Hotstar-style spotlight banner: one full-bleed slide at a time with a peeking card stack
+// behind it, swapped on D-pad left/right with a dot-strip position indicator below.
 class HeroCarouselRowPresenter : RowPresenter() {
 
     init {
-        // Leanback wraps a row's view in a WRAP_CONTENT RowContainerView whenever it has a header
-        // presenter or the default select (dim-on-unselected) effect is active, which collapses
-        // this row's match_parent width down to its content's intrinsic size. Real Jio Hotstar's
-        // spotlight banner has no row header label or dim/border select effect (only the dot
-        // strip indicates focus), so disabling both here is both the width fix and the correct
-        // visual match.
+        // No header/select-effect - Leanback would otherwise wrap this row in a WRAP_CONTENT
+        // container and collapse its width.
         setHeaderPresenter(null)
         setSelectEffectEnabled(false)
+
     }
 
     override fun isUsingDefaultSelectEffect(): Boolean = false
@@ -46,24 +39,19 @@ class HeroCarouselRowPresenter : RowPresenter() {
         private const val DOT_ACTIVE_WIDTH_DP = 22
         private const val DOT_SPACING_DP = 4
 
-        // How many upcoming slides peek past the current card's right edge - real Jio Hotstar
-        // renders more than this in its underlying RecyclerView, but only ~2 are ever actually
-        // visible before clipping off the row; 3 gives a bit of extra depth. Minimum of 2 keeps
-        // the layered-stack look recognizable - a single peek reads as a mistake, not a stack.
-        private const val PEEK_COUNT = 3
+        // Max peeks built; only slides that actually exist show (see renderPeeks).
+        private const val PEEK_COUNT_MAX = 2
 
-        // Each successive peek is a genuinely SMALLER card (not a same-size card just clipped
-        // more), sized as this fraction of the CURRENT card's own width/height, measured off the
-        // live Jio Hotstar app: peek depth 1 is ~77%w / ~87.5%h, depth 2 is ~54%w / ~75%h.
-        private val PEEK_WIDTH_RATIO = floatArrayOf(0.771f, 0.537f, 0.40f)
-        private val PEEK_HEIGHT_RATIO = floatArrayOf(0.875f, 0.750f, 0.65f)
-        // How far each peek's start edge shifts right, as a fraction of the current card's width
-        // - increasing per depth so cards visibly stagger rather than stacking on the same edge.
-        private val PEEK_START_SHIFT_RATIO = floatArrayOf(0.30f, 0.52f, 0.70f)
+        // Peek size/position ratios, measured off a real Jio Hotstar screenshot.
+        private val PEEK_WIDTH_RATIO = floatArrayOf(0.77f, 0.54f, 0.40f)
+        private val PEEK_HEIGHT_RATIO = floatArrayOf(0.87f, 0.74f, 0.62f)
+        private const val PEEK_SHIFT_STEP_DP = 230f
+        private const val PEEK_FADE_DURATION_MS = 220L
     }
 
-    /** One dynamically-built peek layer: the whole card that recedes further as [depth] grows. */
-    class PeekViewHolder(val card: CardView, val images: CrossfadeImagePair)
+    class PeekViewHolder(val card: CardView, val images: CrossfadeImagePair) {
+        var boundTitleId: Int? = null
+    }
 
     class ViewHolder(rootView: View) : RowPresenter.ViewHolder(rootView) {
         val card: CardView = rootView.findViewById(R.id.hero_card)
@@ -83,7 +71,6 @@ class HeroCarouselRowPresenter : RowPresenter() {
         var autoRotateRunnable: Runnable? = null
     }
 
-    /** Flat colors used when a slide has no real backdrop art (offline sample data). */
     private val fallbackPalette = intArrayOf(
         0xFF1E3A5F.toInt(),
         0xFF6A1B9A.toInt(),
@@ -152,7 +139,6 @@ class HeroCarouselRowPresenter : RowPresenter() {
         holder.adapter = null
     }
 
-    /** Returns true (consumes the key) if the move was applied; false lets the event propagate. */
     private fun tryAdvance(holder: ViewHolder, delta: Int): Boolean {
         val adapter = holder.adapter ?: return false
         val count = adapter.size()
@@ -165,14 +151,8 @@ class HeroCarouselRowPresenter : RowPresenter() {
 
     private fun currentItem(holder: ViewHolder): Any? = holder.adapter?.get(holder.selectedIndex)
 
-    /** Builds [PEEK_COUNT] peek cards into [ViewHolder.peekContainer], nearest-to-farthest, each
-     * a genuinely smaller card than the last (see the ratio tables above, derived from real Jio
-     * Hotstar measurements) rather than a full-size card merely clipped to look smaller. Sizing
-     * depends on the current card's own width, which is only known once it has been laid out to
-     * its final size - `doOnLayout` (unlike a one-shot ViewTreeObserver listener removed after
-     * its first, possibly-premature firing) guarantees the callback runs after a genuine layout
-     * pass with real measurements, so peek sizing can't be computed off a transient 0/undersized
-     * pass. Built once per row view and reused across every subsequent bind/slide change. */
+    // Peek sizing depends on the active card's own measured width, so this waits for a real
+    // layout pass (doOnLayout survives re-layouts, unlike a one-shot ViewTreeObserver listener).
     private fun buildPeekViews(holder: ViewHolder) {
         holder.card.doOnLayout {
             val cardWidth = holder.card.width
@@ -186,7 +166,11 @@ class HeroCarouselRowPresenter : RowPresenter() {
         if (holder.peeks.isNotEmpty()) return
         val context = holder.peekContainer.context
         val density = context.resources.displayMetrics.density
-        for (i in 0 until PEEK_COUNT) {
+        // Each peek is inserted at index 0 (not appended) so earlier, closer peeks stay drawn on
+        // top of farther ones - FrameLayout draws children lowest-index-first.
+        val shiftStepPx = (PEEK_SHIFT_STEP_DP * density).toInt()
+        for (i in 0 until PEEK_COUNT_MAX) {
+            val depth = i + 1
             val card = CardView(context).apply {
                 radius = 14f * density
                 setCardBackgroundColor(context.getColor(R.color.banner_background))
@@ -195,7 +179,7 @@ class HeroCarouselRowPresenter : RowPresenter() {
             val peekWidth = (cardWidth * PEEK_WIDTH_RATIO[i]).toInt()
             val peekHeight = (cardHeight * PEEK_HEIGHT_RATIO[i]).toInt()
             val params = FrameLayout.LayoutParams(peekWidth, peekHeight, android.view.Gravity.CENTER_VERTICAL)
-            params.marginStart = (cardWidth * PEEK_START_SHIFT_RATIO[i]).toInt()
+            params.marginStart = shiftStepPx * depth
             card.layoutParams = params
 
             val imageContainer = FrameLayout(context)
@@ -205,12 +189,10 @@ class HeroCarouselRowPresenter : RowPresenter() {
             )
             val images = CrossfadeImagePair(imageContainer)
 
-            holder.peekContainer.addView(card)
+            holder.peekContainer.addView(card, 0)
             holder.peeks.add(PeekViewHolder(card, images))
         }
-        // Peeks are built asynchronously after the first layout pass, so re-apply whatever slide
-        // is already bound - otherwise a peek built after bindSlide() already ran would stay
-        // empty until the next navigation.
+        // Re-render whatever slide is already bound, since these views were built after that.
         val adapter = holder.adapter ?: return
         renderPeeks(holder, adapter, holder.selectedIndex)
     }
@@ -237,26 +219,27 @@ class HeroCarouselRowPresenter : RowPresenter() {
         preloadUpcoming(holder, adapter, index)
     }
 
-    /** Slivers of the upcoming slides peeking past the current card's right edge, matching real
-     * Jio Hotstar's layered hero banner: every visible peek shows its title's actual (dimmed)
-     * backdrop art, not just the nearest one - real content throughout the stack, like the real
-     * app. Images load from Glide's memory cache instantly here in the common case, since
-     * [preloadUpcoming] already fetched them while this same item was still a peek itself. */
     private fun renderPeeks(holder: ViewHolder, adapter: ObjectAdapter, index: Int) {
         holder.peeks.forEachIndexed { i, peek ->
             val depth = i + 1
             val peekItem = itemAt(adapter, index + depth)
-            peek.card.visibility = if (peekItem != null) View.VISIBLE else View.INVISIBLE
-            if (peekItem == null) return@forEachIndexed
+            if (peekItem == null) {
+                peek.card.animate().cancel()
+                peek.card.visibility = View.INVISIBLE
+                peek.boundTitleId = null
+                return@forEachIndexed
+            }
+            val isNewTitle = peek.boundTitleId != peekItem.id
+            peek.boundTitleId = peekItem.id
             loadBackdrop(peek.images, peekItem)
+            if (!isNewTitle && peek.card.visibility == View.VISIBLE) return@forEachIndexed
+            peek.card.animate().cancel()
+            peek.card.alpha = 0f
+            peek.card.visibility = View.VISIBLE
+            peek.card.animate().alpha(1f).setDuration(PEEK_FADE_DURATION_MS).start()
         }
     }
 
-    /** Loads a title's backdrop without ever flashing the flat fallback color mid-navigation:
-     * [CrossfadeImagePair] keeps whatever was showing on screen until the new image is decoded,
-     * then crossfades - matching the real app's behavior of never showing a bare loading state,
-     * only ever a photo (old or new). The flat palette color is only ever used on a pair's very
-     * first load, when there's no prior image to hold onto. */
     private fun loadBackdrop(images: CrossfadeImagePair, item: Title) {
         val backdropUrl = item.backdropUrl
         if (backdropUrl == null) {
@@ -266,12 +249,9 @@ class HeroCarouselRowPresenter : RowPresenter() {
         }
     }
 
-    /** Warms Glide's cache for the slides just past what's currently visible (both directions),
-     * so by the time the user D-pads there the image is already decoded and swaps in instantly
-     * instead of showing the flat placeholder color while it loads. */
     private fun preloadUpcoming(holder: ViewHolder, adapter: ObjectAdapter, index: Int) {
         val context = holder.peekContainer.context
-        val preloadRange = (index - 1)..(index + PEEK_COUNT + 1)
+        val preloadRange = (index - 1)..(index + PEEK_COUNT_MAX + 1)
         for (i in preloadRange) {
             if (i == index) continue
             val url = itemAt(adapter, i)?.backdropUrl ?: continue

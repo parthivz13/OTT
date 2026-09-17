@@ -39,14 +39,9 @@ class MainActivity : FragmentActivity() {
         if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT && event.action == KeyEvent.ACTION_DOWN) {
             val before = currentFocus
             val handled = super.dispatchKeyEvent(event)
-            // A view can legitimately consume DPAD_LEFT without moving Android focus at all -
-            // e.g. the hero carousel swaps its displayed slide in place. Only escape to the side
-            // nav when the key event actually went unhandled, not merely when focus didn't move.
-            //
-            // Leanback's HorizontalGridView can move focus to the previous card asynchronously
-            // (posted, not synchronous within this call), so checking currentFocus immediately
-            // here would misfire on every interior column, not just column 0. Defer the check to
-            // the next message loop turn, after any focus change Leanback queued has applied.
+            // Leanback's HorizontalGridView moves focus to the previous card asynchronously, so
+            // checking currentFocus immediately would misfire on every interior column. Defer to
+            // the next message loop turn, and only escape to the nav if the key truly went unhandled.
             if (!handled && before != null && !isNavDescendant(before)) {
                 before.post {
                     if (currentFocus === before) {
@@ -76,9 +71,7 @@ class MainActivity : FragmentActivity() {
 
             icon.setOnFocusChangeListener { view, hasFocus ->
                 animateLabel(labelView, hasFocus)
-                // Check after this focus change has fully settled, so moving focus between
-                // two nav items (one loses focus, the next gains it) collapses-then-immediately
-                // re-expands instead of flickering closed for a frame.
+                // Defer until focus settles, so moving between nav items doesn't flicker closed for a frame.
                 view.post { updateNavExpansion() }
             }
 
@@ -132,9 +125,7 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun animateNavWidth(targetDp: Int) {
-        // Cancel any in-flight resize first - without this, rapidly moving focus in and out of
-        // the nav (e.g. flicking through icons) stacks multiple animators fighting over the same
-        // width, causing jank or a final width that doesn't match the last real focus state.
+        // Cancel any in-flight resize, or rapid focus changes stack animators fighting over width.
         widthAnimator?.cancel()
         val density = resources.displayMetrics.density
         val startPx = navContainer.width.takeIf { it > 0 } ?: (COLLAPSED_WIDTH_DP * density).toInt()
