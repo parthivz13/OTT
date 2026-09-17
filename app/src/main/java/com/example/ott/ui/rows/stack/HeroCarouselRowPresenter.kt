@@ -27,6 +27,7 @@ class HeroCarouselRowPresenter : RowPresenter() {
         // container and collapse its width.
         setHeaderPresenter(null)
         setSelectEffectEnabled(false)
+
     }
 
     override fun isUsingDefaultSelectEffect(): Boolean = false
