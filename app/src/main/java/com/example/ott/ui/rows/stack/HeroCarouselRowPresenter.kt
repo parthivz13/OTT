@@ -47,15 +47,25 @@ class HeroCarouselRowPresenter : RowPresenter() {
         private val PEEK_HEIGHT_RATIO = floatArrayOf(0.87f, 0.74f, 0.62f)
         private const val PEEK_SHIFT_STEP_DP = 230f
         private const val PEEK_FADE_DURATION_MS = 220L
+
+        // Slot-shift carousel motion: each of the 3 fixed slots (active, peek1, peek2) briefly
+        // animates its transform to *look like* it occupies the neighboring slot, then snaps back
+        // to identity and rebinds content - the underlying slot geometry (position/size/margins)
+        // never actually changes, so this can never regress the peek-stack layout.
+        private const val SHIFT_DURATION_MS = 260L
+        private const val EXIT_SHIFT_EXTRA_DP = 120f
     }
 
     class PeekViewHolder(val card: CardView, val images: CrossfadeImagePair) {
         var boundTitleId: Int? = null
     }
 
+    private class SlotGeometry(val left: Int, val top: Int, val width: Int, val height: Int)
+
     class ViewHolder(rootView: View) : RowPresenter.ViewHolder(rootView) {
         val card: CardView = rootView.findViewById(R.id.hero_card)
         val backdropContainer: FrameLayout = rootView.findViewById(R.id.hero_backdrop_container)
+        val textBlock: View = rootView.findViewById(R.id.hero_text_block)
         val badge: TextView = rootView.findViewById(R.id.hero_badge)
         val title: TextView = rootView.findViewById(R.id.hero_title)
         val meta: TextView = rootView.findViewById(R.id.hero_meta)
@@ -67,6 +77,9 @@ class HeroCarouselRowPresenter : RowPresenter() {
 
         var adapter: ObjectAdapter? = null
         var selectedIndex: Int = 0
+        var textBound: Boolean = false
+        var isShifting: Boolean = false
+        var pendingDelta: Int = 0
         val autoRotateHandler = Handler(Looper.getMainLooper())
         var autoRotateRunnable: Runnable? = null
     }
@@ -128,6 +141,7 @@ class HeroCarouselRowPresenter : RowPresenter() {
         val holder = vh as ViewHolder
         holder.adapter = row.adapter
         holder.selectedIndex = 0
+        holder.textBound = false
         bindSlide(holder, 0)
         startAutoRotate(holder)
     }
@@ -141,12 +155,137 @@ class HeroCarouselRowPresenter : RowPresenter() {
 
     private fun tryAdvance(holder: ViewHolder, delta: Int): Boolean {
         val adapter = holder.adapter ?: return false
+        // A shift is already animating - queue this key press (latest one wins) instead of
+        // dropping it, so a burst of rapid presses still lands on the final requested slide.
+        if (holder.isShifting) {
+            val next = holder.selectedIndex + delta
+            if (next < 0 || next >= adapter.size()) return false
+            holder.pendingDelta = delta
+            return true
+        }
         val count = adapter.size()
         val next = holder.selectedIndex + delta
         if (next < 0 || next >= count) return false
         holder.selectedIndex = next
-        bindSlide(holder, next)
+        if (holder.peeks.size == PEEK_COUNT_MAX) {
+            playShiftAnimation(holder, delta) {
+                bindSlide(holder, next)
+                drainPendingAdvance(holder)
+            }
+        } else {
+            bindSlide(holder, next)
+        }
         return true
+    }
+
+    private fun drainPendingAdvance(holder: ViewHolder) {
+        val delta = holder.pendingDelta
+        if (delta == 0) return
+        holder.pendingDelta = 0
+        tryAdvance(holder, delta)
+    }
+
+    // Slides every slot's content one position toward the incoming direction: on RIGHT, active
+    // content moves toward peek1's slot while fading out (it's leaving), peek1's content moves
+    // toward peek2's slot, and peek2 fades out to make room for the new content bindSlide loads
+    // once slots snap back. LEFT mirrors this toward the opposite edge. Slot geometry itself never
+    // moves - only translationX/scale transforms, reset to identity before rebinding.
+    private fun playShiftAnimation(holder: ViewHolder, delta: Int, onEnd: () -> Unit) {
+        holder.isShifting = true
+        val density = holder.card.context.resources.displayMetrics.density
+        val activeGeom = SlotGeometry(0, 0, holder.card.width, holder.card.height)
+        val peek1 = holder.peeks[0]
+        val peek2 = holder.peeks[1]
+        val peek1Geom = SlotGeometry(
+            (peek1.card.layoutParams as FrameLayout.LayoutParams).marginStart,
+            peek1.card.top, peek1.card.width, peek1.card.height
+        )
+        val peek2Geom = SlotGeometry(
+            (peek2.card.layoutParams as FrameLayout.LayoutParams).marginStart,
+            peek2.card.top, peek2.card.width, peek2.card.height
+        )
+        val exitShiftPx = (EXIT_SHIFT_EXTRA_DP * density).toInt()
+
+        // RIGHT (delta > 0): active exits left and fades, peek1 moves left into the active slot,
+        // peek2 moves left into peek1's slot - the vacated peek2 slot gets the new (4th) title
+        // once slots snap back. LEFT (delta < 0): mirror image - active moves right into peek1's
+        // slot and fades, peek1 moves right into peek2's slot, peek2 exits right and fades, making
+        // room for the previous title to land in the active slot once slots snap back.
+        val animators: List<android.animation.Animator> = if (delta > 0) {
+            listOf(
+                transformTo(peek1.card, peek1Geom, activeGeom, fadeOut = false),
+                transformTo(peek2.card, peek2Geom, peek1Geom, fadeOut = false),
+                fadeOutTranslate(holder.card, -exitShiftPx)
+            )
+        } else {
+            listOf(
+                transformTo(holder.card, activeGeom, peek1Geom, fadeOut = true),
+                transformTo(peek1.card, peek1Geom, peek2Geom, fadeOut = false),
+                fadeOutInPlace(peek2.card, exitShiftPx)
+            )
+        }
+
+        android.animation.AnimatorSet().apply {
+            playTogether(animators)
+            duration = SHIFT_DURATION_MS
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    resetTransform(holder.card)
+                    resetTransform(peek1.card)
+                    resetTransform(peek2.card)
+                    holder.isShifting = false
+                    onEnd()
+                }
+            })
+            start()
+        }
+    }
+
+    private fun transformTo(view: View, from: SlotGeometry, to: SlotGeometry, fadeOut: Boolean): android.animation.Animator {
+        val dx = (to.left + to.width / 2f) - (from.left + from.width / 2f)
+        val scaleX = to.width / from.width.toFloat()
+        val scaleY = to.height / from.height.toFloat()
+        view.translationX = 0f
+        view.scaleX = 1f
+        view.scaleY = 1f
+        val set = android.animation.AnimatorSet()
+        val move = android.animation.ObjectAnimator.ofFloat(view, View.TRANSLATION_X, 0f, dx)
+        val sx = android.animation.ObjectAnimator.ofFloat(view, View.SCALE_X, 1f, scaleX)
+        val sy = android.animation.ObjectAnimator.ofFloat(view, View.SCALE_Y, 1f, scaleY)
+        val parts = mutableListOf<android.animation.Animator>(move, sx, sy)
+        if (fadeOut) {
+            parts += android.animation.ObjectAnimator.ofFloat(view, View.ALPHA, 1f, 0f)
+        }
+        set.playTogether(parts)
+        return set
+    }
+
+    private fun fadeOutInPlace(view: View, exitShiftPx: Int): android.animation.Animator {
+        view.translationX = 0f
+        val set = android.animation.AnimatorSet()
+        set.playTogether(
+            android.animation.ObjectAnimator.ofFloat(view, View.TRANSLATION_X, 0f, exitShiftPx.toFloat()),
+            android.animation.ObjectAnimator.ofFloat(view, View.ALPHA, view.alpha, 0f)
+        )
+        return set
+    }
+
+    private fun fadeOutTranslate(view: View, dx: Int): android.animation.Animator {
+        view.translationX = 0f
+        val set = android.animation.AnimatorSet()
+        set.playTogether(
+            android.animation.ObjectAnimator.ofFloat(view, View.TRANSLATION_X, 0f, dx.toFloat()),
+            android.animation.ObjectAnimator.ofFloat(view, View.ALPHA, 1f, 0f)
+        )
+        return set
+    }
+
+    private fun resetTransform(view: View) {
+        view.animate().cancel()
+        view.translationX = 0f
+        view.scaleX = 1f
+        view.scaleY = 1f
+        view.alpha = 1f
     }
 
     private fun currentItem(holder: ViewHolder): Any? = holder.adapter?.get(holder.selectedIndex)
@@ -202,6 +341,34 @@ class HeroCarouselRowPresenter : RowPresenter() {
         if (index !in 0 until adapter.size()) return
         val item = adapter.get(index) as Title
 
+        applyTextForSlide(holder, item)
+
+        loadBackdrop(holder.backdrop, item)
+        renderDots(holder, adapter.size(), index)
+        renderPeeks(holder, adapter, index)
+        preloadUpcoming(holder, adapter, index)
+    }
+
+    // Crossfades the title/meta/overview block the same way the backdrop does, instead of
+    // snapping the text instantly - swap happens at alpha 0, in between the two fades.
+    private fun applyTextForSlide(holder: ViewHolder, item: Title) {
+        holder.textBlock.animate().cancel()
+        if (!holder.textBound) {
+            holder.textBound = true
+            bindTextViews(holder, item)
+            return
+        }
+        holder.textBlock.animate()
+            .alpha(0f)
+            .setDuration(PEEK_FADE_DURATION_MS)
+            .withEndAction {
+                bindTextViews(holder, item)
+                holder.textBlock.animate().alpha(1f).setDuration(PEEK_FADE_DURATION_MS).start()
+            }
+            .start()
+    }
+
+    private fun bindTextViews(holder: ViewHolder, item: Title) {
         holder.title.text = item.name
         holder.meta.text = buildMetaLine(item)
         holder.overview.text = item.overview
@@ -212,11 +379,6 @@ class HeroCarouselRowPresenter : RowPresenter() {
         } else {
             holder.badge.visibility = View.GONE
         }
-
-        loadBackdrop(holder.backdrop, item)
-        renderDots(holder, adapter.size(), index)
-        renderPeeks(holder, adapter, index)
-        preloadUpcoming(holder, adapter, index)
     }
 
     private fun renderPeeks(holder: ViewHolder, adapter: ObjectAdapter, index: Int) {
@@ -245,7 +407,7 @@ class HeroCarouselRowPresenter : RowPresenter() {
         if (backdropUrl == null) {
             images.setColor(paletteColorFor(item))
         } else {
-            images.load(backdropUrl)
+            images.load(backdropUrl, paletteColorFor(item))
         }
     }
 
