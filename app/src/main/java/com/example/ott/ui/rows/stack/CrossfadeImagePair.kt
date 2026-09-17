@@ -24,18 +24,32 @@ class CrossfadeImagePair(container: FrameLayout, private val durationMs: Long = 
     }
     private var showingFront = true
 
+    // What's currently showing (or in flight) - re-requesting the same source while a shift
+    // animation runs would otherwise reset the visible ImageView to alpha 0 and blank the card
+    // for a frame while Glide redecodes an image it already fetched moments ago.
+    private var currentUrl: String? = null
+    private var currentColor: Int? = null
+
     init {
         val params = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         container.addView(back, params)
         container.addView(front, params)
     }
 
-    fun load(url: String) {
+    fun load(url: String, placeholderColor: Int) {
+        if (url == currentUrl) return
+        currentUrl = url
+        currentColor = null
+
         val incoming = if (showingFront) back else front
         val outgoing = if (showingFront) front else back
         showingFront = !showingFront
 
         incoming.animate().cancel()
+        // A fresh (never-shown-before) source can take a while over the network - show a neutral
+        // placeholder immediately instead of leaving the incoming view blank/black until it
+        // resolves, matching the outgoing view's alpha=1 look so the crossfade doesn't dip to 0.
+        incoming.setImageDrawable(ColorDrawable(placeholderColor))
         outgoing.animate().cancel()
 
         Glide.with(incoming)
@@ -65,6 +79,10 @@ class CrossfadeImagePair(container: FrameLayout, private val durationMs: Long = 
     }
 
     fun setColor(color: Int) {
+        if (color == currentColor) return
+        currentColor = color
+        currentUrl = null
+
         val incoming = if (showingFront) back else front
         val outgoing = if (showingFront) front else back
         showingFront = !showingFront

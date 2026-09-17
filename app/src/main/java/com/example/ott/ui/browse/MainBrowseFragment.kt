@@ -153,6 +153,6 @@ class MainBrowseFragment : BrowseSupportFragment() {
         private const val TAG = "MainBrowseFragment"
         private const val BACKGROUND_UPDATE_DELAY_MS = 300L
         private const val HERO_ROW_ID = -1L
-        private const val HERO_CAROUSEL_ASSET_LIMIT = 4
+        private const val HERO_CAROUSEL_ASSET_LIMIT = 10
     }
 }
