@@ -14,5 +14,6 @@ data class Title(
     val contentRating: String = "U/A 16+",
     val durationOrSeasons: String = "",
     val audioLanguages: String = "English • Hindi",
-    val qualityTag: String = "4K • Dolby Vision"
+    val qualityTag: String = "4K • Dolby Vision",
+    val videoUrl: String? = null
 )

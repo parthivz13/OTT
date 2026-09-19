@@ -36,6 +36,7 @@ class TvMazeRepository(private val api: TvMazeApi) {
             else -> "U/A 13+"
         }
         val quality = if (index % 2 == 0) "4K • Dolby Vision" else "4K • Dolby Atmos"
+        val videoUrl = sampleVideos[index % sampleVideos.size]
 
         return Title(
             id = id,
@@ -51,7 +52,15 @@ class TvMazeRepository(private val api: TvMazeApi) {
             contentRating = contentRating,
             durationOrSeasons = "Series",
             audioLanguages = "English • Hindi",
-            qualityTag = quality
+            qualityTag = quality,
+            videoUrl = videoUrl
+        )
+    }
+
+    companion object {
+        private val sampleVideos = listOf(
+            "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+            "https://raw.githubusercontent.com/mediaelement/mediaelement-files/master/big_buck_bunny.mp4"
         )
     }
 }

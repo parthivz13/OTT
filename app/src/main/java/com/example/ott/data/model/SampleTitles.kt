@@ -2,6 +2,11 @@ package com.example.ott.data.model
 
 // Fallback data when no TMDB API key is configured or the network call fails.
 object SampleTitles {
+    private val sampleVideos = listOf(
+        "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+        "https://raw.githubusercontent.com/mediaelement/mediaelement-files/master/big_buck_bunny.mp4"
+    )
+
     val fallback: List<Title> = listOf(
         Title(
             id = 1,
@@ -163,5 +168,7 @@ object SampleTitles {
             audioLanguages = "Spanish • Hindi • English",
             qualityTag = "HD • 5.1 Audio"
         )
-    )
+    ).mapIndexed { index, title ->
+        title.copy(videoUrl = sampleVideos[index % sampleVideos.size])
+    }
 }

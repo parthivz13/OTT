@@ -49,8 +49,14 @@ class CrossfadeImagePair(container: FrameLayout, private val durationMs: Long = 
         // A fresh (never-shown-before) source can take a while over the network - show a neutral
         // placeholder immediately instead of leaving the incoming view blank/black until it
         // resolves, matching the outgoing view's alpha=1 look so the crossfade doesn't dip to 0.
+        val hasExistingContent = outgoing.drawable != null
         incoming.setImageDrawable(ColorDrawable(placeholderColor))
         outgoing.animate().cancel()
+
+        if (!hasExistingContent) {
+            incoming.alpha = 1f
+            outgoing.alpha = 0f
+        }
 
         Glide.with(incoming)
             .load(url)
@@ -62,7 +68,10 @@ class CrossfadeImagePair(container: FrameLayout, private val durationMs: Long = 
                     model: Any?,
                     target: Target<Drawable>,
                     isFirstResource: Boolean
-                ): Boolean = false
+                ): Boolean {
+                    incoming.alpha = 1f
+                    return false
+                }
 
                 override fun onResourceReady(
                     resource: Drawable,
@@ -71,7 +80,12 @@ class CrossfadeImagePair(container: FrameLayout, private val durationMs: Long = 
                     dataSource: DataSource,
                     isFirstResource: Boolean
                 ): Boolean {
-                    crossfade(incoming, outgoing)
+                    if (hasExistingContent) {
+                        crossfade(incoming, outgoing)
+                    } else {
+                        incoming.alpha = 1f
+                        outgoing.alpha = 0f
+                    }
                     return false
                 }
             })
@@ -90,8 +104,14 @@ class CrossfadeImagePair(container: FrameLayout, private val durationMs: Long = 
         incoming.animate().cancel()
         outgoing.animate().cancel()
         Glide.with(incoming).clear(incoming)
+        val hasExistingContent = outgoing.drawable != null
         incoming.setImageDrawable(ColorDrawable(color))
-        crossfade(incoming, outgoing)
+        if (hasExistingContent) {
+            crossfade(incoming, outgoing)
+        } else {
+            incoming.alpha = 1f
+            outgoing.alpha = 0f
+        }
     }
 
     private fun crossfade(incoming: View, outgoing: View) {

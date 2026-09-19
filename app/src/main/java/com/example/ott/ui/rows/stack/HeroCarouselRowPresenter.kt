@@ -5,11 +5,18 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
+import android.graphics.Matrix
+import android.graphics.SurfaceTexture
+import android.media.AudioAttributes
+import android.media.MediaPlayer
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.LayoutInflater
+import android.view.Surface
+import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
@@ -36,6 +43,8 @@ import com.example.ott.data.model.Title
  * - Zero-flicker view-slot recycling without image reloads during navigation.
  * - Exact D-pad navigation: left-handoff to sidebar at index 0, down-handoff to rails.
  * - Animated white capsule & translucent dot indicator strip.
+ * - Smooth trailer playback with hardware-accelerated TextureView + MediaPlayer,
+ *   respecting CardView rounded corners, vignette scrims, and auto-advancing on completion.
  */
 class HeroCarouselRowPresenter : RowPresenter() {
 
@@ -48,6 +57,9 @@ class HeroCarouselRowPresenter : RowPresenter() {
 
     companion object {
         private const val AUTO_ROTATE_INTERVAL_MS = 14000L
+        private const val TRAILER_DELAY_MS = 2200L
+        private const val TRAILER_CROSSFADE_MS = 350L
+
         private const val DOT_SIZE_DP = 6
         private const val DOT_ACTIVE_WIDTH_DP = 24
         private const val DOT_SPACING_DP = 6
@@ -63,7 +75,11 @@ class HeroCarouselRowPresenter : RowPresenter() {
         private const val PEEK_2_ALPHA = 0.55f
     }
 
-    class CardSlotView(val card: CardView, val images: CrossfadeImagePair) {
+    class CardSlotView(
+        val card: CardView,
+        val images: CrossfadeImagePair,
+        val textureView: TextureView
+    ) {
         var boundTitleId: Int? = null
     }
 
@@ -101,6 +117,12 @@ class HeroCarouselRowPresenter : RowPresenter() {
         var pendingDelta: Int = 0
         val autoRotateHandler = Handler(Looper.getMainLooper())
         var autoRotateRunnable: Runnable? = null
+
+        var mediaPlayer: MediaPlayer? = null
+        val trailerHandler = Handler(Looper.getMainLooper())
+        var trailerRunnable: Runnable? = null
+        var activePlayingTextureView: TextureView? = null
+        var isTrailerPlaying: Boolean = false
     }
 
     private val fallbackPalette = intArrayOf(
@@ -119,7 +141,11 @@ class HeroCarouselRowPresenter : RowPresenter() {
             .inflate(R.layout.row_hero_carousel, parent, false)
         val viewHolder = ViewHolder(rootView)
 
-        buildCardSlots(viewHolder)
+        // Pre-create card views synchronously so they are in the hierarchy before the first layout pass
+        setupSlots(viewHolder)
+        viewHolder.stack.doOnLayout {
+            setupSlots(viewHolder)
+        }
 
         // D-Pad Remote Navigation
         viewHolder.card.setOnKeyListener { _, keyCode, event ->
@@ -197,8 +223,12 @@ class HeroCarouselRowPresenter : RowPresenter() {
         val holder = vh as ViewHolder
         holder.adapter = row.adapter
         holder.selectedIndex = 0
-        if (holder.slotsInitialized) {
-            bindInitialState(holder)
+        if (holder.stack.isLaidOut && holder.stack.width > 0) {
+            setupSlots(holder)
+        } else {
+            holder.stack.doOnLayout {
+                setupSlots(holder)
+            }
         }
         startAutoRotate(holder)
     }
@@ -206,82 +236,118 @@ class HeroCarouselRowPresenter : RowPresenter() {
     override fun onUnbindRowViewHolder(vh: RowPresenter.ViewHolder) {
         super.onUnbindRowViewHolder(vh)
         val holder = vh as ViewHolder
+        stopTrailer(holder)
         stopAutoRotate(holder)
         holder.adapter = null
     }
 
-    private fun buildCardSlots(holder: ViewHolder) {
-        holder.stack.doOnLayout {
-            val totalW = holder.stack.width
-            val totalH = holder.stack.height
-            if (totalW == 0 || totalH == 0) return@doOnLayout
+    private fun setupSlots(holder: ViewHolder) {
+        val density = holder.stack.context.resources.displayMetrics.density
+        val totalW = if (holder.stack.width > 0) {
+            holder.stack.width
+        } else {
+            val screenW = holder.stack.context.resources.displayMetrics.widthPixels
+            screenW - ((88 + 24 + 24) * density).toInt()
+        }
+        val totalH = if (holder.stack.height > 0) {
+            holder.stack.height
+        } else {
+            (390 * density).toInt()
+        }
 
-            val density = holder.stack.context.resources.displayMetrics.density
+        // Active Card dimensions matching JioHotstar 73% width ratio
+        val activeW = (totalW * 0.74f).toInt()
+        val activeH = totalH
 
-            // Active Card dimensions matching JioHotstar 73% width ratio
-            val activeW = (totalW * 0.74f).toInt()
-            val activeH = totalH
+        // Update hero_card overlay layoutParams to precisely cover Slot 0
+        val cardParams = holder.card.layoutParams as FrameLayout.LayoutParams
+        cardParams.width = activeW
+        cardParams.height = activeH
+        cardParams.marginEnd = 0
+        holder.card.layoutParams = cardParams
 
-            // Update hero_card overlay layoutParams to precisely cover Slot 0
-            val cardParams = holder.card.layoutParams as FrameLayout.LayoutParams
-            cardParams.width = activeW
-            cardParams.height = activeH
-            cardParams.marginEnd = 0
-            holder.card.layoutParams = cardParams
+        if (holder.cardViews.isEmpty()) {
+            val context = holder.cardsContainer.context
+            // Create 4 card views:
+            // View 3 (buffer / incoming)
+            // View 2 (Slot 2 - Peek 2)
+            // View 1 (Slot 1 - Peek 1)
+            // View 0 (Slot 0 - Active)
+            for (i in 0 until 4) {
+                val card = CardView(context).apply {
+                    radius = 18f * density
+                    setCardBackgroundColor(context.getColor(R.color.hotstar_card_surface))
+                    cardElevation = 2f * density
+                    pivotX = 0f
+                    pivotY = 0f
+                }
 
-            if (holder.cardViews.isEmpty()) {
-                val context = holder.cardsContainer.context
-                // Create 4 card views:
-                // View 3 (buffer / incoming)
-                // View 2 (Slot 2 - Peek 2)
-                // View 1 (Slot 1 - Peek 1)
-                // View 0 (Slot 0 - Active)
-                for (i in 0 until 4) {
-                    val card = CardView(context).apply {
-                        radius = 18f * density
-                        setCardBackgroundColor(context.getColor(R.color.hotstar_card_surface))
-                        cardElevation = 2f * density
-                        pivotX = 0f
-                        pivotY = 0f
-                    }
+                // 1. Poster image layer
+                val container = FrameLayout(context)
+                card.addView(
+                    container,
+                    ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                )
+                val images = CrossfadeImagePair(container)
 
-                    val container = FrameLayout(context)
-                    card.addView(
-                        container,
-                        ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                    )
-                    val images = CrossfadeImagePair(container)
+                // 2. Hardware-accelerated trailer player layer (TextureView)
+                val textureView = TextureView(context).apply {
+                    alpha = 0f
+                    visibility = View.GONE
+                }
+                card.addView(
+                    textureView,
+                    ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                )
 
-                    // Scrims
-                    val vignette = View(context).apply {
-                        setBackgroundResource(R.drawable.card_left_vignette_scrim)
-                    }
-                    card.addView(vignette, FrameLayout.LayoutParams((activeW * 0.60f).toInt(), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START))
+                // 3. Left vignette scrim (maintains metadata readability over video)
+                val vignette = View(context).apply {
+                    setBackgroundResource(R.drawable.card_left_vignette_scrim)
+                }
+                card.addView(vignette, FrameLayout.LayoutParams((activeW * 0.60f).toInt(), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START))
 
-                    val bottomScrim = View(context).apply {
-                        setBackgroundResource(R.drawable.card_bottom_scrim)
-                    }
-                    card.addView(bottomScrim, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (activeH * 0.65f).toInt(), Gravity.BOTTOM))
+                // 4. Bottom gradient scrim
+                val bottomScrim = View(context).apply {
+                    setBackgroundResource(R.drawable.card_bottom_scrim)
+                }
+                card.addView(bottomScrim, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (activeH * 0.65f).toInt(), Gravity.BOTTOM))
 
-                    // Initial layout params matching active card size
-                    val lp = FrameLayout.LayoutParams(activeW, activeH)
-                    card.layoutParams = lp
+                // Initial layout params matching active card size
+                val lp = FrameLayout.LayoutParams(activeW, activeH)
+                card.layoutParams = lp
 
-                    // Add to container: index 0 is at bottom of z-stack
-                    holder.cardsContainer.addView(card, 0)
-                    holder.cardViews.add(CardSlotView(card, images))
+                // Add to container: index 0 is at bottom of z-stack
+                holder.cardsContainer.addView(card, 0)
+                holder.cardViews.add(CardSlotView(card, images, textureView))
+            }
+        } else {
+            for (slotView in holder.cardViews) {
+                val lp = slotView.card.layoutParams as? FrameLayout.LayoutParams ?: continue
+                if (lp.width != activeW || lp.height != activeH) {
+                    lp.width = activeW
+                    lp.height = activeH
+                    slotView.card.layoutParams = lp
                 }
             }
-
-            holder.slotsInitialized = true
-            bindInitialState(holder)
         }
+
+        holder.slotsInitialized = true
+        bindInitialState(holder)
     }
 
     private fun getSlots(holder: ViewHolder): List<Slot> {
-        val totalW = holder.stack.width
-        val totalH = holder.stack.height
         val density = holder.stack.context.resources.displayMetrics.density
+        val totalW = if (holder.stack.width > 0) {
+            holder.stack.width
+        } else {
+            val screenW = holder.stack.context.resources.displayMetrics.widthPixels
+            screenW - ((88 + 24 + 24) * density).toInt()
+        }
+        val totalH = if (holder.stack.height > 0) {
+            holder.stack.height
+        } else {
+            (390 * density).toInt()
+        }
 
         val activeW = (totalW * 0.74f).toInt()
         val activeH = totalH
@@ -381,6 +447,7 @@ class HeroCarouselRowPresenter : RowPresenter() {
 
         renderDots(holder, adapter.size(), holder.selectedIndex)
         preloadUpcoming(holder, adapter, holder.selectedIndex)
+        scheduleTrailer(holder)
     }
 
     private fun tryAdvance(holder: ViewHolder, delta: Int): Boolean {
@@ -405,6 +472,7 @@ class HeroCarouselRowPresenter : RowPresenter() {
         if (next < 0) return false
 
         holder.selectedIndex = next
+        stopTrailer(holder)
         playJioHotstarShift(holder, delta) {
             drainPendingAdvance(holder)
         }
@@ -514,15 +582,16 @@ class HeroCarouselRowPresenter : RowPresenter() {
             // vBuffer binds item (nextIndex) and animates from Slot -1 into Slot 0
             // v0 (Active) animates right from Slot 0 to Slot 1 (Peek 1)
             // v1 (Peek 1) animates right from Slot 1 to Slot 2 (Peek 2), only if item exists
-            // v2 (Peek 2) animates right from Slot 2 to Slot 3 (dissolving out), only if it was visible
+            // v2 (Peek 2): In JioHotstar, when the stack has cards (nextIndex + 2 exists),
+            // the card already at Slot 2 remains solidly VISIBLE at Slot 2 (slots[3]) with its peek alpha.
+            // It does NOT animate or dissolve out to alpha 0 and recreate! v1 smoothly glides from Slot 1
+            // directly over v2 into Slot 2.
 
             val incomingItem = itemAt(adapter, nextIndex)
             if (incomingItem != null) {
                 applySlot(vBuffer.card, slots[0]) // Slot -1 (Left: -36dp, scale 0.96f, alpha 0f)
                 loadTitle(vBuffer, incomingItem)
                 vBuffer.card.visibility = View.VISIBLE
-                vBuffer.card.bringToFront()
-                holder.card.bringToFront()
                 animators.add(animateBetweenSlots(vBuffer.card, slots[0], slots[1]))
             }
 
@@ -535,17 +604,31 @@ class HeroCarouselRowPresenter : RowPresenter() {
             if (itemAtPeek2 != null) {
                 v1.card.visibility = View.VISIBLE
                 animators.add(animateBetweenSlots(v1.card, slots[2], slots[3]))
+
+                // If v2 was already visible at Slot 2, keep it stationary and solid at slots[3]
+                // while v1 glides in over it. Do NOT fade it out to slots[4]!
+                if (v2.card.visibility == View.VISIBLE) {
+                    applySlot(v2.card, slots[3])
+                    v2.card.alpha = PEEK_2_ALPHA
+                    v2.card.visibility = View.VISIBLE
+                }
             } else {
                 v1.card.visibility = View.INVISIBLE
+                // If there's no item at Peek 2, fade v2 out if it was visible
+                if (v2.card.visibility == View.VISIBLE) {
+                    animators.add(animateBetweenSlots(v2.card, slots[3], slots[4]))
+                }
             }
 
-            // v2 dissolves out to Slot 3 if it had an item (nextIndex + 3)
-            val itemAtPrevPeek2 = itemAt(adapter, nextIndex + 3)
-            if (itemAtPrevPeek2 != null && v2.card.visibility == View.VISIBLE) {
-                animators.add(animateBetweenSlots(v2.card, slots[3], slots[4]))
-            } else {
-                v2.card.visibility = View.INVISIBLE
+            // Strict Z-ordering for DPAD_LEFT:
+            // v2 (stationary bottom) < v1 (sliding into Peek 2) < v0 (sliding into Peek 1) < vBuffer (entering active) < holder.card
+            v2.card.bringToFront()
+            v1.card.bringToFront()
+            v0.card.bringToFront()
+            if (incomingItem != null) {
+                vBuffer.card.bringToFront()
             }
+            holder.card.bringToFront()
 
             AnimatorSet().apply {
                 playTogether(animators)
@@ -611,6 +694,7 @@ class HeroCarouselRowPresenter : RowPresenter() {
         }
 
         holder.isShifting = false
+        scheduleTrailer(holder)
         onEnd()
     }
 
@@ -734,7 +818,7 @@ class HeroCarouselRowPresenter : RowPresenter() {
         val runnable = object : Runnable {
             override fun run() {
                 val adapter = holder.adapter
-                if (adapter != null && adapter.size() > 1 && !holder.card.hasFocus()) {
+                if (adapter != null && adapter.size() > 1 && !holder.card.hasFocus() && !holder.isTrailerPlaying) {
                     val next = (holder.selectedIndex + 1) % adapter.size()
                     holder.selectedIndex = next
                     playJioHotstarShift(holder, 1) {
@@ -751,5 +835,184 @@ class HeroCarouselRowPresenter : RowPresenter() {
     private fun stopAutoRotate(holder: ViewHolder) {
         holder.autoRotateRunnable?.let { holder.autoRotateHandler.removeCallbacks(it) }
         holder.autoRotateRunnable = null
+    }
+
+    // ========================================================================================
+    // Hardware-Accelerated Trailer Video Playback (TextureView + MediaPlayer)
+    // ========================================================================================
+
+    private fun scheduleTrailer(holder: ViewHolder, delayMs: Long = TRAILER_DELAY_MS) {
+        stopTrailer(holder, resetAlpha = true)
+        val runnable = Runnable {
+            startTrailerPlayback(holder)
+        }
+        holder.trailerRunnable = runnable
+        holder.trailerHandler.postDelayed(runnable, delayMs)
+    }
+
+    private fun startTrailerPlayback(holder: ViewHolder) {
+        if (holder.isShifting || holder.cardViews.isEmpty()) return
+        val adapter = holder.adapter ?: return
+        val currentTitle = itemAt(adapter, holder.selectedIndex) ?: return
+        val videoUrl = currentTitle.videoUrl ?: return
+
+        val activeCardSlot = holder.cardViews[0]
+        val textureView = activeCardSlot.textureView
+        val context = holder.stack.context
+
+        stopTrailer(holder, resetAlpha = false)
+
+        val startPlayer = {
+            try {
+                val mp = MediaPlayer().apply {
+                    setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE)
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .build()
+                    )
+                    try {
+                        if (videoUrl.startsWith("http://") || videoUrl.startsWith("https://")) {
+                            setDataSource(videoUrl)
+                        } else {
+                            val afd = context.resources.openRawResourceFd(R.raw.sample_trailer)
+                            setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                            afd.close()
+                        }
+                    } catch (e: Exception) {
+                        val afd = context.resources.openRawResourceFd(R.raw.sample_trailer)
+                        setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                        afd.close()
+                    }
+                    setSurface(Surface(textureView.surfaceTexture))
+                    setOnVideoSizeChangedListener { _, width, height ->
+                        adjustTextureViewAspectRatio(textureView, width, height)
+                    }
+                    setOnPreparedListener { player ->
+                        if (!holder.isShifting && holder.cardViews.isNotEmpty() && holder.cardViews[0] === activeCardSlot) {
+                            player.start()
+                            textureView.visibility = View.VISIBLE
+                            textureView.animate().cancel()
+                            textureView.animate()
+                                .alpha(1f)
+                                .setDuration(TRAILER_CROSSFADE_MS)
+                                .start()
+                            holder.isTrailerPlaying = true
+                        } else {
+                            try { player.release() } catch (_: Exception) {}
+                        }
+                    }
+                    setOnCompletionListener {
+                        // Trailer playback complete! Auto-change to next card matching JioHotstar
+                        stopTrailer(holder, resetAlpha = true)
+                        tryAdvance(holder, 1)
+                    }
+                    setOnErrorListener { _, _, _ ->
+                        // If streaming error occurred, fallback to local bundled trailer
+                        try {
+                            val fallbackMp = MediaPlayer().apply {
+                                val afd = context.resources.openRawResourceFd(R.raw.sample_trailer)
+                                setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                                afd.close()
+                                setSurface(Surface(textureView.surfaceTexture))
+                                setOnVideoSizeChangedListener { _, width, height ->
+                                    adjustTextureViewAspectRatio(textureView, width, height)
+                                }
+                                setOnPreparedListener { p ->
+                                    if (!holder.isShifting && holder.cardViews.isNotEmpty() && holder.cardViews[0] === activeCardSlot) {
+                                        p.start()
+                                        textureView.visibility = View.VISIBLE
+                                        textureView.animate().cancel()
+                                        textureView.animate()
+                                            .alpha(1f)
+                                            .setDuration(TRAILER_CROSSFADE_MS)
+                                            .start()
+                                        holder.isTrailerPlaying = true
+                                    } else {
+                                        try { p.release() } catch (_: Exception) {}
+                                    }
+                                }
+                                setOnCompletionListener {
+                                    stopTrailer(holder, resetAlpha = true)
+                                    tryAdvance(holder, 1)
+                                }
+                                prepareAsync()
+                            }
+                            holder.mediaPlayer?.release()
+                            holder.mediaPlayer = fallbackMp
+                        } catch (_: Exception) {
+                            stopTrailer(holder, resetAlpha = true)
+                        }
+                        true
+                    }
+                    prepareAsync()
+                }
+                holder.mediaPlayer = mp
+                holder.activePlayingTextureView = textureView
+            } catch (e: Exception) {
+                stopTrailer(holder, resetAlpha = true)
+            }
+        }
+
+        if (textureView.isAvailable && textureView.surfaceTexture != null) {
+            startPlayer()
+        } else {
+            textureView.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+                override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
+                    if (holder.cardViews.isNotEmpty() && holder.cardViews[0] === activeCardSlot) {
+                        startPlayer()
+                    }
+                }
+                override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {}
+                override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean = true
+                override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {}
+            }
+            textureView.visibility = View.VISIBLE
+        }
+    }
+
+    private fun adjustTextureViewAspectRatio(textureView: TextureView, videoWidth: Int, videoHeight: Int) {
+        val viewWidth = textureView.width.toFloat()
+        val viewHeight = textureView.height.toFloat()
+        if (viewWidth <= 0 || viewHeight <= 0 || videoWidth <= 0 || videoHeight <= 0) return
+
+        val videoAspect = videoWidth.toFloat() / videoHeight.toFloat()
+        val viewAspect = viewWidth / viewHeight
+        val scaleX: Float
+        val scaleY: Float
+        if (videoAspect > viewAspect) {
+            scaleX = videoAspect / viewAspect
+            scaleY = 1f
+        } else {
+            scaleX = 1f
+            scaleY = viewAspect / videoAspect
+        }
+        val matrix = Matrix()
+        matrix.setScale(scaleX, scaleY, viewWidth / 2f, viewHeight / 2f)
+        textureView.setTransform(matrix)
+    }
+
+    private fun stopTrailer(holder: ViewHolder, resetAlpha: Boolean = true) {
+        holder.trailerRunnable?.let { holder.trailerHandler.removeCallbacks(it) }
+        holder.trailerRunnable = null
+        holder.isTrailerPlaying = false
+
+        val mp = holder.mediaPlayer
+        holder.mediaPlayer = null
+        if (mp != null) {
+            try {
+                mp.stop()
+                mp.reset()
+                mp.release()
+            } catch (_: Exception) {}
+        }
+
+        val tv = holder.activePlayingTextureView
+        holder.activePlayingTextureView = null
+        if (tv != null && resetAlpha) {
+            tv.animate().cancel()
+            tv.alpha = 0f
+            tv.visibility = View.GONE
+        }
     }
 }
