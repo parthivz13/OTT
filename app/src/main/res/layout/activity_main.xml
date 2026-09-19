@@ -8,11 +8,11 @@
         android:id="@+id/main_browse_fragment"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_marginStart="88dp" />
+        android:layout_marginStart="64dp" />
 
     <FrameLayout
         android:id="@+id/nav_container"
-        android:layout_width="88dp"
+        android:layout_width="64dp"
         android:layout_height="match_parent">
 
         <View
@@ -24,7 +24,7 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:orientation="vertical"
-            android:paddingStart="16dp"
+            android:paddingStart="8dp"
             android:paddingTop="24dp">
 
             <View

@@ -247,7 +247,7 @@ class HeroCarouselRowPresenter : RowPresenter() {
             holder.stack.width
         } else {
             val screenW = holder.stack.context.resources.displayMetrics.widthPixels
-            screenW - ((88 + 24 + 24) * density).toInt()
+            screenW - ((64 + 12) * density).toInt()
         }
         val totalH = if (holder.stack.height > 0) {
             holder.stack.height
@@ -255,8 +255,8 @@ class HeroCarouselRowPresenter : RowPresenter() {
             (390 * density).toInt()
         }
 
-        // Active Card dimensions matching JioHotstar 73% width ratio
-        val activeW = (totalW * 0.74f).toInt()
+        // Active Card dimensions matching JioHotstar 78.8% width ratio of carousel viewport
+        val activeW = (totalW * 0.788f).toInt()
         val activeH = totalH
 
         // Update hero_card overlay layoutParams to precisely cover Slot 0
@@ -341,7 +341,7 @@ class HeroCarouselRowPresenter : RowPresenter() {
             holder.stack.width
         } else {
             val screenW = holder.stack.context.resources.displayMetrics.widthPixels
-            screenW - ((88 + 24 + 24) * density).toInt()
+            screenW - ((64 + 12) * density).toInt()
         }
         val totalH = if (holder.stack.height > 0) {
             holder.stack.height
@@ -349,29 +349,34 @@ class HeroCarouselRowPresenter : RowPresenter() {
             (390 * density).toInt()
         }
 
-        val activeW = (totalW * 0.74f).toInt()
+        // Active Card: matching JioHotstar 78.8% width ratio of carousel viewport (2786px / 3536px)
+        val activeW = (totalW * 0.788f).toInt()
         val activeH = totalH
 
-        // Right peeking step: visible width of Peek 1 and Peek 2 (~95dp each)
-        val peekVisible = (totalW - activeW) / 2
+        // Visible peeking slice: both Peek 1 and Peek 2 have identical visible width (~76dp / 303px at 4K)
+        // Leaving 36dp (144px at 4K) right screen edge margin
+        val rightMargin = (36f * density).toInt()
+        val remainingW = (totalW - activeW - rightMargin).coerceAtLeast(0)
+        val peekVisible = (remainingW / 2).coerceAtLeast((70f * density).toInt())
+
         val peek1W = (activeW * PEEK_1_SCALE).toInt()
         val peek1H = (activeH * PEEK_1_SCALE).toInt()
-        val peek1Left = activeW - (peek1W - peekVisible)
+        val peek1Left = activeW + peekVisible - peek1W
         val peek1Top = (activeH - peek1H) / 2
 
         val peek2W = (activeW * PEEK_2_SCALE).toInt()
         val peek2H = (activeH * PEEK_2_SCALE).toInt()
-        val peek2Left = peek1Left + peekVisible
+        val peek2Left = activeW + (2 * peekVisible) - peek2W
         val peek2Top = (activeH - peek2H) / 2
 
-        val exitShift = (36f * density).toInt()
+        val exitShift = (21f * density).toInt()
         val rightExitShift = (peekVisible * 0.6f).toInt()
 
         // Slot indices:
         // 0: Slot -1 (Left subtle exit/enter, scale 0.96f, alpha 0f)
         // 1: Slot 0  (Active slot, scale 1.0f, alpha 1.0f)
-        // 2: Slot 1  (Peek 1, scale 0.88f, alpha 0.85f)
-        // 3: Slot 2  (Peek 2, scale 0.76f, alpha 0.55f)
+        // 2: Slot 1  (Peek 1, scale PEEK_1_SCALE, alpha PEEK_1_ALPHA)
+        // 3: Slot 2  (Peek 2, scale PEEK_2_SCALE, alpha PEEK_2_ALPHA)
         // 4: Slot 3  (Right subtle exit/enter, scale 0.68f, alpha 0f)
         return listOf(
             Slot(-exitShift, 0, activeW, activeH, 0.96f, 0f, 4f * density),
@@ -511,9 +516,11 @@ class HeroCarouselRowPresenter : RowPresenter() {
         holder.isShifting = true
         val slots = getSlots(holder)
 
-        // 1. Instantly dissolve text overlay (exact JioHotstar behavior)
+        // 1. Instantly dissolve text overlay and focus border (exact JioHotstar behavior)
         holder.textBlock.animate().cancel()
         holder.textBlock.alpha = 0f
+        holder.focusBorder.animate().cancel()
+        holder.focusBorder.alpha = 0f
 
         val v0 = holder.cardViews[0] // currently in Slot 0
         val v1 = holder.cardViews[1] // currently in Slot 1
@@ -525,28 +532,32 @@ class HeroCarouselRowPresenter : RowPresenter() {
 
         if (delta > 0) {
             // ADVANCE RIGHT:
-            // v0 (Active) dissolves and slides slightly left to Slot -1 (-36dp, scale 0.96f, alpha 0f)
+            // v0 (Active) dissolves and slides slightly left to Slot -1 (-21dp, scale 0.96f, alpha 0f)
             // v1 (Peek 1) scales up and slides left to Slot 0 (Active)
             // v2 (Peek 2) scales up and slides left to Slot 1 (Peek 1), only if it was visible
-            // vBuffer binds item (nextIndex + 2) and animates from Slot 3 into Slot 2, only if valid
+            // vBuffer (incoming): In JioHotstar, the right stack ALWAYS looks like "only stack" (clean dark card surface).
+            // If item (nextIndex + 2) exists, vBuffer is ALREADY positioned solidly at Slot 2 (slots[3])
+            // with PEEK_2_ALPHA underneath v2. It shows ONLY the blank card surface, not a full poster!
+            // As v2 scales and slides left into Slot 1, what is revealed behind it is purely the stack.
+            // When the animation settles, finishShiftSettle binds the poster for the incoming item.
 
             val incomingItem = itemAt(adapter, nextIndex + 2)
             if (incomingItem != null) {
-                applySlot(vBuffer.card, slots[4]) // Slot 3 (Right exit/enter)
-                loadTitle(vBuffer, incomingItem)
+                applySlot(vBuffer.card, slots[3]) // Pre-position solidly at Slot 2 (Peek 2)
+                vBuffer.card.alpha = PEEK_2_ALPHA
+                vBuffer.images.setColor(holder.stack.context.getColor(R.color.hotstar_card_surface))
                 vBuffer.card.visibility = View.VISIBLE
-                animators.add(animateBetweenSlots(vBuffer.card, slots[4], slots[3]))
+                // vBuffer does NOT animate: it stays stationary at slots[3] as the physical stack
             } else {
                 vBuffer.card.visibility = View.INVISIBLE
             }
 
-            // v0 exits
+            // v0 exits: dissolves and shifts slightly left
+            v0.card.visibility = View.VISIBLE
             animators.add(animateBetweenSlots(v0.card, slots[1], slots[0]))
 
-            // v1 becomes active: bring to front so it smoothly rises above v0
+            // v1 becomes active: scales up and slides into Slot 0
             v1.card.visibility = View.VISIBLE
-            v1.card.bringToFront()
-            holder.card.bringToFront() // Overlay remains on top
             animators.add(animateBetweenSlots(v1.card, slots[2], slots[1]))
 
             // v2 moves to Peek 1 if item (nextIndex + 1) exists
@@ -557,6 +568,14 @@ class HeroCarouselRowPresenter : RowPresenter() {
             } else {
                 v2.card.visibility = View.INVISIBLE
             }
+
+            // Strict Z-ordering for DPAD_RIGHT:
+            // vBuffer (stationary in stack at Peek 2) < v2 (sliding into Peek 1) < v1 (sliding into Active) < v0 (dissolving on top) < holder.card (focus border overlay)
+            vBuffer.card.bringToFront()
+            v2.card.bringToFront()
+            v1.card.bringToFront()
+            v0.card.bringToFront()
+            holder.card.bringToFront() // Overlay remains on top
 
             AnimatorSet().apply {
                 playTogether(animators)
@@ -664,8 +683,21 @@ class HeroCarouselRowPresenter : RowPresenter() {
         // Strict end-of-list visibility check
         vBuffer.card.visibility = View.INVISIBLE
         if (adapter != null) {
-            v1.card.visibility = if (itemAt(adapter, activeIndex + 1) != null) View.VISIBLE else View.INVISIBLE
-            v2.card.visibility = if (itemAt(adapter, activeIndex + 2) != null) View.VISIBLE else View.INVISIBLE
+            val item1 = itemAt(adapter, activeIndex + 1)
+            if (item1 != null) {
+                loadTitle(v1, item1)
+                v1.card.visibility = View.VISIBLE
+            } else {
+                v1.card.visibility = View.INVISIBLE
+            }
+
+            val item2 = itemAt(adapter, activeIndex + 2)
+            if (item2 != null) {
+                loadTitle(v2, item2)
+                v2.card.visibility = View.VISIBLE
+            } else {
+                v2.card.visibility = View.INVISIBLE
+            }
         }
 
         // Ensure proper layer hierarchy
@@ -674,6 +706,11 @@ class HeroCarouselRowPresenter : RowPresenter() {
         v1.card.bringToFront()
         v0.card.bringToFront()
         holder.card.bringToFront() // Overlay always top
+
+        // Restore focus border on active card if hero card is focused
+        if (holder.card.hasFocus()) {
+            holder.focusBorder.animate().alpha(1f).setDuration(160).start()
+        }
 
         val activeItem = adapter?.let { itemAt(it, activeIndex) }
         if (activeItem != null) {
@@ -843,11 +880,7 @@ class HeroCarouselRowPresenter : RowPresenter() {
 
     private fun scheduleTrailer(holder: ViewHolder, delayMs: Long = TRAILER_DELAY_MS) {
         stopTrailer(holder, resetAlpha = true)
-        val runnable = Runnable {
-            startTrailerPlayback(holder)
-        }
-        holder.trailerRunnable = runnable
-        holder.trailerHandler.postDelayed(runnable, delayMs)
+        // Trailer video playback temporarily disabled per user instruction
     }
 
     private fun startTrailerPlayback(holder: ViewHolder) {

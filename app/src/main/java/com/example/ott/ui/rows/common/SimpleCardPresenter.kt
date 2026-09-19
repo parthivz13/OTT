@@ -42,6 +42,8 @@ class SimpleCardPresenter : Presenter() {
 
     override fun onUnbindViewHolder(viewHolder: Presenter.ViewHolder) {
         val holder = viewHolder as ViewHolder
-        Glide.with(holder.image).clear(holder.image)
+        try {
+            Glide.with(holder.image.context.applicationContext).clear(holder.image)
+        } catch (_: Exception) {}
     }
 }

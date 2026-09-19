@@ -155,7 +155,7 @@ class MainActivity : FragmentActivity() {
 
     companion object {
         private const val TAG = "MainActivity"
-        private const val COLLAPSED_WIDTH_DP = 88
+        private const val COLLAPSED_WIDTH_DP = 64
         private const val EXPANDED_WIDTH_DP = 240
         private const val NAV_ANIM_DURATION = 220L
     }
