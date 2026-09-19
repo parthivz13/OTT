@@ -10,5 +10,9 @@ data class Title(
     val mediaType: String,
     val year: String = "",
     val genre: String = "",
-    val badge: String? = null
+    val badge: String? = null,
+    val contentRating: String = "U/A 16+",
+    val durationOrSeasons: String = "",
+    val audioLanguages: String = "English • Hindi",
+    val qualityTag: String = "4K • Dolby Vision"
 )

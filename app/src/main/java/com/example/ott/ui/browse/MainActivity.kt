@@ -45,7 +45,7 @@ class MainActivity : FragmentActivity() {
             if (!handled && before != null && !isNavDescendant(before)) {
                 before.post {
                     if (currentFocus === before) {
-                        navContainer.requestFocus()
+                        (selectedNavIcon ?: findViewById<View>(R.id.nav_home)).requestFocus()
                     }
                 }
             }

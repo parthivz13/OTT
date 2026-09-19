@@ -57,8 +57,12 @@ class MainBrowseFragment : BrowseSupportFragment() {
 
         onItemViewClickedListener = OnItemViewClickedListener { _, item, _, _ ->
             if (item is Title) {
-                // Details screen is a future phase; log the click for now.
                 Log.d(TAG, "Clicked: ${item.name}")
+                android.widget.Toast.makeText(
+                    requireContext(),
+                    "Playing: ${item.name} (${item.qualityTag})",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
             }
         }
 
