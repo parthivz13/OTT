@@ -53,7 +53,13 @@ class TvMazeRepository(private val api: TvMazeApi) {
             durationOrSeasons = "Series",
             audioLanguages = "English • Hindi",
             qualityTag = quality,
-            videoUrl = videoUrl
+            videoUrl = videoUrl,
+            trailerUrl = videoUrl,
+            durationSeconds = (runtime ?: 45) * 60,
+            is4K = index % 2 == 0,
+            isHD = true,
+            isAD = index % 3 == 0,
+            seasonEpisode = if (genres?.isNotEmpty() == true) "S1:E1 • ${genres.first()}" else "S1:E1"
         )
     }
 

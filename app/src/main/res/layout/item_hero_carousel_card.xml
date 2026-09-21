@@ -1,0 +1,319 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/card_hero_carousel_root"
+    android:layout_width="wrap_content"
+    android:layout_height="270dp"
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    android:focusable="true"
+    android:focusableInTouchMode="true"
+    android:padding="6dp">
+
+    <!-- Card Container for corner clipping & focus ring -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/card_hero_container"
+        android:layout_width="@dimen/carousel_unselected_width"
+        android:layout_height="@dimen/carousel_unselected_height"
+        android:layout_marginTop="@dimen/hero_carousel_unfocused_top_margin"
+        app:cardBackgroundColor="#161B22"
+        app:cardCornerRadius="12dp"
+        app:cardElevation="4dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <FrameLayout
+            android:id="@+id/inner_hero_card_layout"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <!-- 1. Media Layer: 2:3 Portrait Poster Image (visible when unfocused) -->
+            <ImageView
+                android:id="@+id/iv_hero_carousel_poster"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="@null"
+                android:scaleType="centerCrop"
+                tools:src="@drawable/simmer_background" />
+
+            <!-- 2. Media Layer: 16:9 Landscape Backdrop Image (crossfades in when expanding) -->
+            <ImageView
+                android:id="@+id/iv_hero_carousel_backdrop"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:alpha="0"
+                android:contentDescription="@null"
+                android:scaleType="centerCrop"
+                tools:src="@drawable/simmer_background" />
+
+            <!-- 3. Media Layer: Media3 ExoPlayer View for Trailer Autoplay -->
+            <androidx.media3.ui.PlayerView
+                android:id="@+id/player_view_hero_carousel"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:alpha="0"
+                android:visibility="gone"
+                app:resize_mode="zoom"
+                app:use_controller="false" />
+
+            <!-- 4. Bottom Gradient Shadow (Crossfades in during expansion) -->
+            <View
+                android:id="@+id/view_hero_bottom_shadow"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:alpha="0"
+                android:background="@drawable/card_bottom_scrim"
+                android:visibility="gone" />
+
+            <!-- 5. Trending Badge (Top-Left) -->
+            <TextView
+                android:id="@+id/tv_hero_carousel_trending"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top|start"
+                android:layout_marginStart="12dp"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/badge_pill_bg"
+                android:fontFamily="sans-serif-black"
+                android:letterSpacing="0.04"
+                android:paddingStart="8dp"
+                android:paddingTop="3dp"
+                android:paddingEnd="8dp"
+                android:paddingBottom="3dp"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:visibility="gone"
+                tools:text="🔥 TOP 10"
+                tools:visibility="visible" />
+
+            <!-- 6. Mute Indicator (Top-Right) -->
+            <ImageView
+                android:id="@+id/iv_hero_carousel_mute"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_gravity="top|end"
+                android:layout_marginTop="12dp"
+                android:layout_marginEnd="12dp"
+                android:background="@drawable/circle_button_bg"
+                android:contentDescription="Muted"
+                android:padding="5dp"
+                android:src="@drawable/hero_mute_indicator"
+                android:visibility="gone" />
+
+            <!-- 7. Expandable Content Details Overlay (Slides up and fades in on expansion) -->
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:id="@+id/layout_hero_content"
+                android:layout_width="@dimen/carousel_selected_width"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|start"
+                android:alpha="0"
+                android:paddingStart="16dp"
+                android:paddingTop="8dp"
+                android:paddingEnd="16dp"
+                android:paddingBottom="16dp"
+                android:visibility="gone"
+                tools:alpha="1"
+                tools:visibility="visible">
+
+                <!-- Title -->
+                <TextView
+                    android:id="@+id/tv_hero_carousel_title"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:fontFamily="sans-serif-black"
+                    android:maxLines="1"
+                    android:shadowColor="#CC000000"
+                    android:shadowDx="0"
+                    android:shadowDy="2"
+                    android:shadowRadius="6"
+                    android:textColor="#FFFFFF"
+                    android:textSize="20sp"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"
+                    tools:text="Stranger Things" />
+
+                <!-- Metadata Row (Year, Genres, Duration, Ratings) -->
+                <LinearLayout
+                    android:id="@+id/layout_hero_metadata"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toBottomOf="@id/tv_hero_carousel_title">
+
+                    <TextView
+                        android:id="@+id/tv_hero_rating"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="6dp"
+                        android:background="@drawable/badge_rating_pill_bg"
+                        android:fontFamily="sans-serif-bold"
+                        android:paddingStart="5dp"
+                        android:paddingTop="1dp"
+                        android:paddingEnd="5dp"
+                        android:paddingBottom="1dp"
+                        android:textColor="#FFD700"
+                        android:textSize="11sp"
+                        tools:text="★ 8.7" />
+
+                    <TextView
+                        android:id="@+id/tv_hero_parental"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="6dp"
+                        android:background="@drawable/badge_pill_bg"
+                        android:paddingStart="5dp"
+                        android:paddingTop="1dp"
+                        android:paddingEnd="5dp"
+                        android:paddingBottom="1dp"
+                        android:textColor="#CCCCCC"
+                        android:textSize="10sp"
+                        tools:text="U/A 16+" />
+
+                    <TextView
+                        android:id="@+id/tv_hero_4k"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="4dp"
+                        android:background="@drawable/badge_pill_bg"
+                        android:paddingStart="4dp"
+                        android:paddingTop="1dp"
+                        android:paddingEnd="4dp"
+                        android:paddingBottom="1dp"
+                        android:text="4K"
+                        android:textColor="#FFFFFF"
+                        android:textSize="10sp" />
+
+                    <TextView
+                        android:id="@+id/tv_hero_hd"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="4dp"
+                        android:background="@drawable/badge_pill_bg"
+                        android:paddingStart="4dp"
+                        android:paddingTop="1dp"
+                        android:paddingEnd="4dp"
+                        android:paddingBottom="1dp"
+                        android:text="HD"
+                        android:textColor="#FFFFFF"
+                        android:textSize="10sp" />
+
+                    <TextView
+                        android:id="@+id/tv_hero_ad"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="6dp"
+                        android:background="@drawable/badge_pill_bg"
+                        android:paddingStart="4dp"
+                        android:paddingTop="1dp"
+                        android:paddingEnd="4dp"
+                        android:paddingBottom="1dp"
+                        android:text="AD"
+                        android:textColor="#FFFFFF"
+                        android:textSize="10sp"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/tv_hero_metadata"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:textColor="#B0BEC5"
+                        android:textSize="11sp"
+                        tools:text="2025 • Sci-Fi" />
+
+                    <TextView
+                        android:id="@+id/tv_hero_duration"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:textColor="#B0BEC5"
+                        android:textSize="11sp"
+                        tools:text="• 1h 45m" />
+                </LinearLayout>
+
+                <!-- Description / Summary -->
+                <TextView
+                    android:id="@+id/tv_hero_carousel_description"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:ellipsize="end"
+                    android:lineSpacingMultiplier="1.15"
+                    android:maxLines="2"
+                    android:shadowColor="#AA000000"
+                    android:shadowDx="0"
+                    android:shadowDy="1"
+                    android:shadowRadius="4"
+                    android:textColor="#DDDDDD"
+                    android:textSize="12sp"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toBottomOf="@id/layout_hero_metadata"
+                    tools:text="When a young boy vanishes, a small town uncovers a mystery involving secret experiments and terrifying supernatural forces." />
+
+                <!-- Action Buttons: Watch Now & Add to Watchlist -->
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="horizontal"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toBottomOf="@id/tv_hero_carousel_description">
+
+                    <Button
+                        android:id="@+id/btn_hero_carousel_watch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="34dp"
+                        android:layout_marginEnd="10dp"
+                        android:background="@drawable/btn_hero_primary_bg"
+                        android:focusable="false"
+                        android:fontFamily="sans-serif-bold"
+                        android:minWidth="0dp"
+                        android:paddingStart="14dp"
+                        android:paddingTop="4dp"
+                        android:paddingEnd="14dp"
+                        android:paddingBottom="4dp"
+                        android:text="▶ Watch Now"
+                        android:textAllCaps="false"
+                        android:textColor="#000000"
+                        android:textSize="12sp" />
+
+                    <Button
+                        android:id="@+id/btn_hero_carousel_watchlist"
+                        android:layout_width="wrap_content"
+                        android:layout_height="34dp"
+                        android:background="@drawable/btn_hero_secondary_bg"
+                        android:focusable="false"
+                        android:fontFamily="sans-serif-bold"
+                        android:minWidth="0dp"
+                        android:paddingStart="12dp"
+                        android:paddingTop="4dp"
+                        android:paddingEnd="12dp"
+                        android:paddingBottom="4dp"
+                        android:text="+ Watchlist"
+                        android:textAllCaps="false"
+                        android:textColor="#FFFFFF"
+                        android:textSize="12sp" />
+                </LinearLayout>
+            </androidx.constraintlayout.widget.ConstraintLayout>
+
+            <!-- 8. Focus Highlight Border (Fades in when focused) -->
+            <View
+                android:id="@+id/view_hero_focus_border"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:alpha="0"
+                android:background="@drawable/hero_card_focus_ring" />
+
+        </FrameLayout>
+    </androidx.cardview.widget.CardView>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

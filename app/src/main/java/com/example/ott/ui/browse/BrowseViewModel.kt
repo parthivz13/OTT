@@ -19,6 +19,15 @@ class BrowseViewModel : ViewModel() {
     private val _rowGroups = MutableLiveData<List<RowGroup>>()
     val rowGroups: LiveData<List<RowGroup>> = _rowGroups
 
+    private val _heroTitles = MutableLiveData<List<Title>>()
+    val heroTitles: LiveData<List<Title>> = _heroTitles
+
+    val heroConfig = com.example.ott.data.model.HeroCarouselConfig(
+        rowId = "hero_carousel_browse",
+        autoRotateEnabled = true,
+        autoRotateDurationSec = 6
+    )
+
     init {
         Log.d(TAG, "init: fetching shows")
         viewModelScope.launch {
@@ -26,6 +35,8 @@ class BrowseViewModel : ViewModel() {
             val result = runCatching { repository.getShows() }
             result.exceptionOrNull()?.let { Log.w(TAG, "tvmaze fetch failed, using fallback", it) }
             val titles = result.getOrNull()?.takeIf { it.isNotEmpty() } ?: SampleTitles.fallback
+            val heroList = titles.sortedByDescending { it.rating }.take(10)
+            _heroTitles.value = heroList
             val groups = buildRowGroups(titles)
             Log.d(TAG, "posting ${groups.size} row groups from ${titles.size} titles")
             _rowGroups.value = groups

@@ -15,5 +15,11 @@ data class Title(
     val durationOrSeasons: String = "",
     val audioLanguages: String = "English • Hindi",
     val qualityTag: String = "4K • Dolby Vision",
-    val videoUrl: String? = null
+    val videoUrl: String? = null,
+    val trailerUrl: String? = videoUrl,
+    val durationSeconds: Int = 5400,
+    val is4K: Boolean = true,
+    val isHD: Boolean = true,
+    val isAD: Boolean = false,
+    val seasonEpisode: String? = null
 )
