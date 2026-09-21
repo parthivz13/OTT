@@ -19,6 +19,9 @@ import androidx.leanback.widget.ListRow
 import androidx.leanback.widget.ListRowPresenter
 import androidx.leanback.widget.OnItemViewClickedListener
 import androidx.leanback.widget.OnItemViewSelectedListener
+import androidx.leanback.widget.Presenter
+import androidx.leanback.widget.PresenterSelector
+import androidx.leanback.widget.Row
 import com.bumptech.glide.Glide
 import com.bumptech.glide.request.target.CustomTarget
 import com.bumptech.glide.request.transition.Transition
@@ -28,7 +31,6 @@ import com.example.ott.ui.rows.common.SimpleCardPresenter
 import com.example.ott.ui.rows.hero.ExpandableHeroCarouselRow
 import com.example.ott.ui.rows.hero.ExpandableHeroCarouselRowPresenter
 import com.example.ott.ui.rows.hero.HeroCarouselCardPresenter
-import com.example.ott.ui.rows.stack.HeroCarouselRow
 import com.example.ott.ui.rows.stack.HeroCarouselRowPresenter
 import com.example.ott.ui.rows.top10.Top10CardPresenter
 import com.example.ott.ui.rows.top10.Top10Item
@@ -54,24 +56,39 @@ class MainBrowseFragment : BrowseSupportFragment() {
         isHeadersTransitionOnBackEnabled = false
         brandColor = ContextCompat.getColor(requireContext(), R.color.brand_accent)
 
-        val presenterSelector = ClassPresenterSelector().apply {
-            addClassPresenter(HeroCarouselRow::class.java, HeroCarouselRowPresenter())
-            addClassPresenter(Top10Row::class.java, Top10RowPresenter())
-            addClassPresenter(ExpandableHeroCarouselRow::class.java, ExpandableHeroCarouselRowPresenter())
-            addClassPresenter(ListRow::class.java, ListRowPresenter().apply {
-                shadowEnabled = false
-                selectEffectEnabled = false
-                val rowHeaderFacet = androidx.leanback.widget.ItemAlignmentFacet().apply {
-                    alignmentDefs = arrayOf(
-                        androidx.leanback.widget.ItemAlignmentFacet.ItemAlignmentDef().apply {
-                            setItemAlignmentViewId(androidx.leanback.R.id.row_header)
-                            itemAlignmentOffset = 0
-                            itemAlignmentOffsetPercent = 0f
-                        }
-                    )
+        val heroCarouselPresenter = HeroCarouselRowPresenter()
+        val top10Presenter = Top10RowPresenter()
+        val expandableHeroPresenter = ExpandableHeroCarouselRowPresenter()
+        val defaultListRowPresenter = ListRowPresenter().apply {
+            shadowEnabled = false
+            selectEffectEnabled = false
+            val rowHeaderFacet = androidx.leanback.widget.ItemAlignmentFacet().apply {
+                alignmentDefs = arrayOf(
+                    androidx.leanback.widget.ItemAlignmentFacet.ItemAlignmentDef().apply {
+                        setItemAlignmentViewId(androidx.leanback.R.id.row_header)
+                        itemAlignmentOffset = 0
+                        itemAlignmentOffsetPercent = 0f
+                    }
+                )
+            }
+            setFacet(androidx.leanback.widget.ItemAlignmentFacet::class.java, rowHeaderFacet)
+        }
+
+        val presenterSelector = object : PresenterSelector() {
+            override fun getPresenters(): Array<Presenter> {
+                return arrayOf(heroCarouselPresenter, top10Presenter, expandableHeroPresenter, defaultListRowPresenter)
+            }
+
+            override fun getPresenter(item: Any?): Presenter {
+                val row = item as? Row
+                val id = row?.id ?: row?.headerItem?.id
+                return when {
+                    id == HERO_STACK_ROW_ID -> heroCarouselPresenter
+                    id == TOP_10_ROW_ID || item is Top10Row -> top10Presenter
+                    id == EXPANDABLE_HERO_ROW_ID || item is ExpandableHeroCarouselRow -> expandableHeroPresenter
+                    else -> defaultListRowPresenter
                 }
-                setFacet(androidx.leanback.widget.ItemAlignmentFacet::class.java, rowHeaderFacet)
-            })
+            }
         }
         rowsAdapter = ArrayObjectAdapter(presenterSelector)
         adapter = rowsAdapter
@@ -130,6 +147,7 @@ class MainBrowseFragment : BrowseSupportFragment() {
     }
 
     override fun onDestroyView() {
+        HeroCarouselRowPresenter.releasePlayer()
         HeroCarouselCardPresenter.releasePlayer()
         pendingBackgroundUpdate?.let { backgroundHandler.removeCallbacks(it) }
         super.onDestroyView()
@@ -145,7 +163,7 @@ class MainBrowseFragment : BrowseSupportFragment() {
                 addAll(0, it.items.take(HERO_CAROUSEL_ASSET_LIMIT))
             }
             val stackHeader = HeaderItem(HERO_STACK_ROW_ID, it.title)
-            rowsAdapter.add(HeroCarouselRow(stackHeader, stackHeroAdapter))
+            rowsAdapter.add(ListRow(stackHeader, stackHeroAdapter))
 
             // 2. Netflix-style Top 10 curated row in SECOND POSITION
             val top10Adapter = ArrayObjectAdapter(Top10CardPresenter()).apply {

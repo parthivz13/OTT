@@ -5,17 +5,12 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
-import android.graphics.Matrix
-import android.graphics.SurfaceTexture
-import android.media.AudioAttributes
-import android.media.MediaPlayer
-import android.net.Uri
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.LayoutInflater
-import android.view.Surface
 import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
@@ -25,28 +20,31 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.cardview.widget.CardView
 import androidx.core.view.doOnLayout
+import androidx.leanback.widget.ArrayObjectAdapter
+import androidx.leanback.widget.ListRow
 import androidx.leanback.widget.ObjectAdapter
+import androidx.leanback.widget.Row
 import androidx.leanback.widget.RowPresenter
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.example.ott.R
 import com.example.ott.data.model.Title
+import com.example.ott.sott.base.CarouselFocusListener
+import com.example.ott.sott.models.CustomAsset
+import com.example.ott.sott.models.CustomKalturaAsset
+import com.example.ott.sott.networking.RailCommonData
+import com.example.ott.sott.utils.AppCommonMethod
+import com.example.ott.sott.utils.SharedPrefHelper
+import com.example.ott.sott.utils.constants.AppConstants
+import com.example.ott.types.Asset
 
-/**
- * 100% JioHotstar / Disney+ Hotstar spotlight hero carousel.
- *
- * Implements exact telemetry observed from the running JioHotstar TV app:
- * - 2.5D Stacked cards with fixed active viewport and peeking right cards.
- * - Stationary crisp white rounded focus border on active card slot.
- * - Hardware-accelerated slot-shift transition physics (Decelerate 1.8f, 280ms).
- * - Instant text fade-out before slide, and staggered slide-fade in after settling.
- * - Zero-flicker view-slot recycling without image reloads during navigation.
- * - Exact D-pad navigation: left-handoff to sidebar at index 0, down-handoff to rails.
- * - Animated white capsule & translucent dot indicator strip.
- * - Smooth trailer playback with hardware-accelerated TextureView + MediaPlayer,
- *   respecting CardView rounded corners, vignette scrims, and auto-advancing on completion.
- */
-class HeroCarouselRowPresenter : RowPresenter() {
+class HeroCarouselRowPresenter(
+    var railCommonData: RailCommonData? = null,
+    private val carouselFocusListener: CarouselFocusListener? = null
+) : RowPresenter() {
 
     init {
         setHeaderPresenter(null)
@@ -57,8 +55,8 @@ class HeroCarouselRowPresenter : RowPresenter() {
 
     companion object {
         private const val AUTO_ROTATE_INTERVAL_MS = 14000L
-        private const val TRAILER_DELAY_MS = 2200L
-        private const val TRAILER_CROSSFADE_MS = 350L
+        private const val FOCUS_HOLD_BEFORE_AUTOPLAY_MS = 600L
+        private const val TRAILER_CROSSFADE_MS = 250L
 
         private const val DOT_SIZE_DP = 6
         private const val DOT_ACTIVE_WIDTH_DP = 24
@@ -73,6 +71,44 @@ class HeroCarouselRowPresenter : RowPresenter() {
 
         private const val PEEK_1_ALPHA = 0.85f
         private const val PEEK_2_ALPHA = 0.55f
+
+        private var sharedPlayer: ExoPlayer? = null
+        private var activeHolder: ViewHolder? = null
+        private val autoplayHandler = Handler(Looper.getMainLooper())
+        private var pendingAutoplayRunnable: Runnable? = null
+
+        @Synchronized
+        private fun getOrCreatePlayer(context: Context): ExoPlayer {
+            if (sharedPlayer == null) {
+                sharedPlayer = ExoPlayer.Builder(context.applicationContext)
+                    .build()
+                    .apply {
+                        volume = 1f
+                        repeatMode = Player.REPEAT_MODE_ONE
+                    }
+            }
+            return sharedPlayer!!
+        }
+
+        fun stopActiveVideo() {
+            pendingAutoplayRunnable?.let { autoplayHandler.removeCallbacks(it) }
+            pendingAutoplayRunnable = null
+
+            sharedPlayer?.apply {
+                playWhenReady = false
+                stop()
+                clearMediaItems()
+                setVideoTextureView(null)
+            }
+            activeHolder?.revertToPoster()
+            activeHolder = null
+        }
+
+        fun releasePlayer() {
+            stopActiveVideo()
+            sharedPlayer?.release()
+            sharedPlayer = null
+        }
     }
 
     class CardSlotView(
@@ -80,7 +116,7 @@ class HeroCarouselRowPresenter : RowPresenter() {
         val images: CrossfadeImagePair,
         val textureView: TextureView
     ) {
-        var boundTitleId: Int? = null
+        var boundTitleId: Any? = null
     }
 
     private data class Slot(
@@ -118,11 +154,18 @@ class HeroCarouselRowPresenter : RowPresenter() {
         val autoRotateHandler = Handler(Looper.getMainLooper())
         var autoRotateRunnable: Runnable? = null
 
-        var mediaPlayer: MediaPlayer? = null
-        val trailerHandler = Handler(Looper.getMainLooper())
-        var trailerRunnable: Runnable? = null
         var activePlayingTextureView: TextureView? = null
         var isTrailerPlaying: Boolean = false
+
+        fun revertToPoster() {
+            cardViews.forEach { slotView ->
+                slotView.textureView.animate().cancel()
+                slotView.textureView.alpha = 0f
+                slotView.textureView.visibility = View.GONE
+            }
+            activePlayingTextureView = null
+            isTrailerPlaying = false
+        }
     }
 
     private val fallbackPalette = intArrayOf(
@@ -148,6 +191,7 @@ class HeroCarouselRowPresenter : RowPresenter() {
         }
 
         // D-Pad Remote Navigation
+        viewHolder.focusBorder.alpha = if (viewHolder.selectedIndex == 0) 1f else 0f
         viewHolder.card.setOnKeyListener { _, keyCode, event ->
             if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
             when (keyCode) {
@@ -184,16 +228,20 @@ class HeroCarouselRowPresenter : RowPresenter() {
 
         // Focus Border & Auto-Rotation Sync
         viewHolder.card.setOnFocusChangeListener { _, hasFocus ->
-            viewHolder.focusBorder.animate().cancel()
+            /*viewHolder.focusBorder.animate().cancel()
             val targetAlpha = if (hasFocus) 1f else 0f
             viewHolder.focusBorder.animate()
                 .alpha(targetAlpha)
                 .setDuration(160L)
-                .start()
+                .start()*/
+
+            carouselFocusListener?.onCarouselFocusChanged(hasFocus)
 
             if (hasFocus) {
                 stopAutoRotate(viewHolder)
+                scheduleTrailer(viewHolder)
             } else {
+                stopTrailer(viewHolder)
                 startAutoRotate(viewHolder)
             }
 
@@ -219,9 +267,14 @@ class HeroCarouselRowPresenter : RowPresenter() {
 
     override fun onBindRowViewHolder(vh: RowPresenter.ViewHolder, item: Any) {
         super.onBindRowViewHolder(vh, item)
-        val row = item as HeroCarouselRow
         val holder = vh as ViewHolder
-        holder.adapter = row.adapter
+
+        if (item is RailCommonData) {
+            railCommonData = item
+        }
+
+        val adapter = resolveAdapter(item)
+        holder.adapter = adapter
         holder.selectedIndex = 0
         if (holder.stack.isLaidOut && holder.stack.width > 0) {
             setupSlots(holder)
@@ -231,6 +284,75 @@ class HeroCarouselRowPresenter : RowPresenter() {
             }
         }
         startAutoRotate(holder)
+    }
+
+    private fun resolveAdapter(item: Any): ObjectAdapter {
+        return when (item) {
+            is ListRow -> item.adapter
+            is Row -> {
+                try {
+                    val method = item.javaClass.getMethod("getAdapter")
+                    (method.invoke(item) as? ObjectAdapter) ?: ArrayObjectAdapter()
+                } catch (_: Exception) {
+                    ArrayObjectAdapter()
+                }
+            }
+            is ObjectAdapter -> item
+            is RailCommonData -> extractAdapterFromRail(item)
+            is List<*> -> ArrayObjectAdapter().apply { addAll(0, item.filterNotNull()) }
+            is Array<*> -> ArrayObjectAdapter().apply { addAll(0, item.filterNotNull()) }
+            is CustomAsset, is CustomKalturaAsset, is com.example.ott.EnveuCategoryServices.Asset, is Asset, is Title -> {
+                ArrayObjectAdapter().apply { add(item) }
+            }
+            else -> {
+                extractAdapterViaReflection(item) ?: ArrayObjectAdapter().apply { add(item) }
+            }
+        }
+    }
+
+    private fun extractAdapterFromRail(rail: RailCommonData): ObjectAdapter {
+        val adapter = ArrayObjectAdapter()
+        val list = rail.assets
+            ?: rail.customAssets
+            ?: rail.customKalturaAssets
+            ?: rail.enveuAssets
+            ?: rail.items
+        if (!list.isNullOrEmpty()) {
+            adapter.addAll(0, list)
+        }
+        return adapter
+    }
+
+    private fun extractAdapterViaReflection(item: Any): ObjectAdapter? {
+        val methods = listOf("getAssets", "getItems", "getAssetList", "getData", "getList")
+        for (name in methods) {
+            try {
+                val method = item.javaClass.getMethod(name)
+                val result = method.invoke(item)
+                if (result is List<*>) {
+                    return ArrayObjectAdapter().apply { addAll(0, result.filterNotNull()) }
+                }
+                if (result is ObjectAdapter) {
+                    return result
+                }
+            } catch (_: Exception) {
+            }
+        }
+        val fields = listOf("assets", "items", "assetList", "data", "list")
+        for (name in fields) {
+            try {
+                val field = item.javaClass.getDeclaredField(name).apply { isAccessible = true }
+                val result = field.get(item)
+                if (result is List<*>) {
+                    return ArrayObjectAdapter().apply { addAll(0, result.filterNotNull()) }
+                }
+                if (result is ObjectAdapter) {
+                    return result
+                }
+            } catch (_: Exception) {
+            }
+        }
+        return null
     }
 
     override fun onUnbindRowViewHolder(vh: RowPresenter.ViewHolder) {
@@ -416,13 +538,13 @@ class HeroCarouselRowPresenter : RowPresenter() {
         val vBuffer = holder.cardViews[3]
 
         applySlot(v0.card, slots[1])
-        loadTitle(v0, activeItem)
+        loadAsset(v0, activeItem)
         v0.card.visibility = View.VISIBLE
 
         val item1 = itemAt(adapter, holder.selectedIndex + 1)
         if (item1 != null) {
             applySlot(v1.card, slots[2])
-            loadTitle(v1, item1)
+            loadAsset(v1, item1)
             v1.card.visibility = View.VISIBLE
         } else {
             v1.card.visibility = View.INVISIBLE
@@ -431,7 +553,7 @@ class HeroCarouselRowPresenter : RowPresenter() {
         val item2 = itemAt(adapter, holder.selectedIndex + 2)
         if (item2 != null) {
             applySlot(v2.card, slots[3])
-            loadTitle(v2, item2)
+            loadAsset(v2, item2)
             v2.card.visibility = View.VISIBLE
         } else {
             v2.card.visibility = View.INVISIBLE
@@ -447,8 +569,8 @@ class HeroCarouselRowPresenter : RowPresenter() {
         holder.card.bringToFront() // Overlay remains on top
 
         bindTextViews(holder, activeItem)
-        holder.textBlock.alpha = 1f
-        holder.textBlock.translationY = 0f
+        /*holder.textBlock.alpha = 1f
+        holder.textBlock.translationY = 0f*/
 
         renderDots(holder, adapter.size(), holder.selectedIndex)
         preloadUpcoming(holder, adapter, holder.selectedIndex)
@@ -471,7 +593,7 @@ class HeroCarouselRowPresenter : RowPresenter() {
         val next = holder.selectedIndex + delta
         if (next >= count && delta > 0) {
             // At the end of the carousel, play tactile spring resistance like JioHotstar
-            playEndBounce(holder)
+//            playEndBounce(holder)
             return true
         }
         if (next < 0) return false
@@ -517,10 +639,10 @@ class HeroCarouselRowPresenter : RowPresenter() {
         val slots = getSlots(holder)
 
         // Dissolve text overlay and focus border during transition
-        holder.textBlock.animate().cancel()
+        /*holder.textBlock.animate().cancel()
         holder.textBlock.alpha = 0f
         holder.focusBorder.animate().cancel()
-        holder.focusBorder.alpha = 0f
+        holder.focusBorder.alpha = 0f*/
 
         val v0 = holder.cardViews[0]
         val v1 = holder.cardViews[1]
@@ -531,11 +653,6 @@ class HeroCarouselRowPresenter : RowPresenter() {
         val animators = mutableListOf<Animator>()
 
         if (delta > 0) {
-            // Forward (DPAD_RIGHT):
-            // v0 exits slightly left (-21dp) while dissolving
-            // v1 slides from Peek 1 into Active (Slot 0)
-            // v2 slides from Peek 2 into Peek 1 (Slot 1)
-            // vBuffer stays stationary at Peek 2 (Slot 2) as blank stack surface; title poster binds on settle
             val incomingItem = itemAt(adapter, nextIndex + 2)
             if (incomingItem != null) {
                 applySlot(vBuffer.card, slots[3])
@@ -594,7 +711,7 @@ class HeroCarouselRowPresenter : RowPresenter() {
             val incomingItem = itemAt(adapter, nextIndex)
             if (incomingItem != null) {
                 applySlot(vBuffer.card, slots[0])
-                loadTitle(vBuffer, incomingItem)
+                loadAsset(vBuffer, incomingItem)
                 vBuffer.card.visibility = View.VISIBLE
                 animators.add(animateBetweenSlots(vBuffer.card, slots[0], slots[1]))
             }
@@ -664,7 +781,7 @@ class HeroCarouselRowPresenter : RowPresenter() {
         if (adapter != null) {
             val item1 = itemAt(adapter, activeIndex + 1)
             if (item1 != null) {
-                loadTitle(v1, item1)
+                loadAsset(v1, item1)
                 v1.card.visibility = View.VISIBLE
             } else {
                 v1.card.visibility = View.INVISIBLE
@@ -672,7 +789,7 @@ class HeroCarouselRowPresenter : RowPresenter() {
 
             val item2 = itemAt(adapter, activeIndex + 2)
             if (item2 != null) {
-                loadTitle(v2, item2)
+                loadAsset(v2, item2)
                 v2.card.visibility = View.VISIBLE
             } else {
                 v2.card.visibility = View.INVISIBLE
@@ -687,21 +804,21 @@ class HeroCarouselRowPresenter : RowPresenter() {
         holder.card.bringToFront() // Overlay always top
 
         // Restore focus border on active card if hero card is focused
-        if (holder.card.hasFocus()) {
+        /*if (holder.card.hasFocus()) {
             holder.focusBorder.animate().alpha(1f).setDuration(160).start()
-        }
+        }*/
 
         val activeItem = adapter?.let { itemAt(it, activeIndex) }
         if (activeItem != null) {
             bindTextViews(holder, activeItem)
             // Staggered slide and fade-in (160ms)
-            holder.textBlock.translationY = 8f * density
+            /*holder.textBlock.translationY = 8f * density
             holder.textBlock.animate()
                 .alpha(1f)
                 .translationY(0f)
                 .setDuration(TEXT_FADE_IN_MS)
                 .setInterpolator(DecelerateInterpolator())
-                .start()
+                .start()*/
         }
 
         if (adapter != null) {
@@ -732,25 +849,237 @@ class HeroCarouselRowPresenter : RowPresenter() {
         return set
     }
 
-    private fun loadTitle(slotView: CardSlotView, item: Title) {
-        slotView.boundTitleId = item.id
-        val backdropUrl = item.backdropUrl
-        if (backdropUrl == null) {
-            slotView.images.setColor(paletteColorFor(item))
-        } else {
-            slotView.images.load(backdropUrl, paletteColorFor(item))
+    data class ResolvedAsset(
+        val id: Any,
+        val name: String,
+        val description: String,
+        val imageUrl: String?,
+        val trailerUrl: String?,
+        val contentRating: String,
+        val metaLine: String,
+        val qualityTag: String,
+        val badge: String?,
+        val showBasicDetails: Boolean = true
+    )
+
+    private fun resolveAsset(context: Context, item: Any?, isFocused: Boolean = false): ResolvedAsset? {
+        if (item == null) return null
+        return when (item) {
+            is CustomAsset -> bindCustomAsset(item)
+            is CustomKalturaAsset -> bindCustomKalturaAsset(item)
+            is com.example.ott.EnveuCategoryServices.Asset -> bindEnveuAsset(item)
+            is Asset -> bindKalturaAsset(context, item, isFocused)
+            is Title -> bindTitle(item)
+            else -> {
+                ResolvedAsset(
+                    id = item.hashCode(),
+                    name = item.toString(),
+                    description = "",
+                    imageUrl = null,
+                    trailerUrl = null,
+                    contentRating = "",
+                    metaLine = "",
+                    qualityTag = "",
+                    badge = null,
+                    showBasicDetails = true
+                )
+            }
         }
     }
 
-    private fun bindTextViews(holder: ViewHolder, item: Title) {
-        holder.title.text = item.name
-        holder.contentRating.text = item.contentRating
-        holder.meta.text = buildMetaLine(item)
-        holder.qualityBadge.text = item.qualityTag
-        holder.overview.text = item.overview
+    private fun bindCustomAsset(item: CustomAsset): ResolvedAsset {
+        return ResolvedAsset(
+            id = item.id ?: item.hashCode(),
+            name = "",
+            description = "",
+            imageUrl = item.images?.firstOrNull()?.url,
+            trailerUrl = null,
+            contentRating = "",
+            metaLine = "",
+            qualityTag = "",
+            badge = null,
+            showBasicDetails = false
+        )
+    }
 
-        if (!item.badge.isNullOrBlank()) {
-            holder.badge.text = item.badge
+    private fun bindCustomKalturaAsset(item: CustomKalturaAsset): ResolvedAsset {
+        return ResolvedAsset(
+            id = item.id ?: item.hashCode(),
+            name = item.name.orEmpty(),
+            description = "",
+            imageUrl = item.images?.firstOrNull()?.url,
+            trailerUrl = null,
+            contentRating = "",
+            metaLine = "",
+            qualityTag = "",
+            badge = null,
+            showBasicDetails = true
+        )
+    }
+
+    private fun bindEnveuAsset(item: com.example.ott.EnveuCategoryServices.Asset): ResolvedAsset {
+        return ResolvedAsset(
+            id = item.id ?: item.hashCode(),
+            name = item.name.orEmpty(),
+            description = "",
+            imageUrl = item.images?.firstOrNull()?.url,
+            trailerUrl = null,
+            contentRating = "",
+            metaLine = "",
+            qualityTag = "",
+            badge = null,
+            showBasicDetails = true
+        )
+    }
+
+    private fun bindKalturaAsset(
+        context: Context,
+        asset: Asset,
+        isFocused: Boolean = false
+    ): ResolvedAsset {
+        val seasonEpisode = AppCommonMethod.addSeasonAndEpisodeNo(asset)
+        val descriptionText = if (!seasonEpisode.isNullOrEmpty()) {
+            seasonEpisode
+        } else {
+            AppCommonMethod.getMetaByTag(asset, "LongSummary").orEmpty()
+        }
+
+        val initialTrailer = asset.mediaFiles?.firstOrNull {
+            it.type?.equals("Preview", ignoreCase = true) == true
+        }?.url
+
+        val externalId = asset.externalId.orEmpty()
+        val trailerFromPref = if (externalId.isNotEmpty()) {
+            SharedPrefHelper.getInstance().getTrailerFromMap(context, externalId)?.toString()
+        } else {
+            null
+        }
+        val trailerUrl = if (!trailerFromPref.isNullOrEmpty()) trailerFromPref else initialTrailer
+
+        val metadataText = AppCommonMethod.getMetas(asset)
+
+        val duration = asset.mediaFiles?.firstOrNull()?.duration ?: 0L
+        val hours = (duration / 3600).toInt()
+        val minutes = ((duration % 3600) / 60).toInt()
+        val durationText = when {
+            hours > 0 && minutes > 0 -> "• ${hours}h ${minutes}m"
+            hours > 0 -> "• ${hours}h"
+            minutes > 0 -> "• ${minutes}m"
+            else -> ""
+        }
+
+        val qualities = AppCommonMethod.getQualities(asset)
+        val parentalRating = AppCommonMethod.getTagsFromAsset(asset, AppConstants.PARENTAL_RATING)
+
+        val ratingData = AppCommonMethod.getMetaByTag(asset, AppConstants.star_rating)
+        val ratingFormatted = if (!ratingData.isNullOrEmpty() && ratingData != "0") {
+            ratingData.toDoubleOrNull()?.let { "★ " + String.format("%.1f", it) }.orEmpty()
+        } else ""
+
+        val metaParts = listOfNotNull(
+            metadataText.takeIf { it.isNotBlank() },
+            durationText.takeIf { it.isNotBlank() },
+            ratingFormatted.takeIf { it.isNotBlank() }
+        )
+
+        val ratio = if (isFocused) AppConstants.RATIO_16X9_cover else AppConstants.RATIO_2X3
+        val density = context.resources.displayMetrics.density
+        val width = if (isFocused) (880 * density).toInt() else (260 * density).toInt()
+        val height = if (isFocused) (390 * density).toInt() else (390 * density).toInt()
+
+        val imageUrl = asset.images?.takeIf { it.isNotEmpty() }?.let {
+            AppCommonMethod.getCardwiseImage(it, ratio, width, height)
+        } ?: asset.images?.firstOrNull()?.url
+
+        return ResolvedAsset(
+            id = asset.id ?: asset.hashCode(),
+            name = asset.name.orEmpty(),
+            description = descriptionText,
+            imageUrl = imageUrl,
+            trailerUrl = trailerUrl,
+            contentRating = parentalRating,
+            metaLine = metaParts.joinToString("  •  "),
+            qualityTag = qualities.joinToString(" • "),
+            badge = null,
+            showBasicDetails = true
+        )
+    }
+
+    private fun bindTitle(title: Title): ResolvedAsset {
+        return ResolvedAsset(
+            id = title.id,
+            name = title.name,
+            description = if (!title.seasonEpisode.isNullOrEmpty()) title.seasonEpisode else title.overview,
+            imageUrl = title.backdropUrl ?: title.posterUrl,
+            trailerUrl = title.trailerUrl ?: title.videoUrl,
+            contentRating = title.contentRating,
+            metaLine = buildMetaLineForTitle(title),
+            qualityTag = title.qualityTag,
+            badge = title.badge,
+            showBasicDetails = true
+        )
+    }
+
+    private fun loadAsset(slotView: CardSlotView, item: Any?, isFocused: Boolean = false) {
+        val asset = resolveAsset(slotView.card.context, item, isFocused)
+        if (asset == null) {
+            slotView.boundTitleId = null
+            slotView.images.setColor(fallbackPalette[0])
+            return
+        }
+        slotView.boundTitleId = asset.id
+        val backdropUrl = asset.imageUrl
+        if (backdropUrl == null) {
+            slotView.images.setColor(paletteColorFor(asset.id))
+        } else {
+            slotView.images.load(backdropUrl, paletteColorFor(asset.id))
+        }
+    }
+
+    private fun bindTextViews(holder: ViewHolder, item: Any?) {
+        val asset = resolveAsset(holder.stack.context, item, true)
+        if (asset == null || !asset.showBasicDetails) {
+            holder.title.text = ""
+            holder.overview.visibility = View.GONE
+            holder.contentRating.visibility = View.GONE
+            holder.meta.visibility = View.GONE
+            holder.qualityBadge.visibility = View.GONE
+            holder.badge.visibility = View.GONE
+            return
+        }
+
+        holder.title.text = asset.name
+
+        if (asset.description.isNotEmpty()) {
+            holder.overview.text = asset.description
+            holder.overview.visibility = View.VISIBLE
+        } else {
+            holder.overview.visibility = View.GONE
+        }
+
+        if (asset.contentRating.isNotEmpty()) {
+            holder.contentRating.text = asset.contentRating
+            holder.contentRating.visibility = View.VISIBLE
+        } else {
+            holder.contentRating.visibility = View.GONE
+        }
+
+        if (asset.metaLine.isNotEmpty()) {
+            holder.meta.text = asset.metaLine
+            holder.meta.visibility = View.VISIBLE
+        } else {
+            holder.meta.visibility = View.GONE
+        }
+
+        if (asset.qualityTag.isNotEmpty()) {
+            holder.qualityBadge.text = asset.qualityTag
+            holder.qualityBadge.visibility = View.VISIBLE
+        } else {
+            holder.qualityBadge.visibility = View.GONE
+        }
+
+        if (!asset.badge.isNullOrBlank()) {
+            holder.badge.text = asset.badge
             holder.badge.visibility = View.VISIBLE
         } else {
             holder.badge.visibility = View.GONE
@@ -762,7 +1091,8 @@ class HeroCarouselRowPresenter : RowPresenter() {
         val preloadRange = (index - 1)..(index + 4)
         for (i in preloadRange) {
             if (i == index) continue
-            val url = itemAt(adapter, i)?.backdropUrl ?: continue
+            val item = itemAt(adapter, i) ?: continue
+            val url = resolveAsset(context, item, false)?.imageUrl ?: continue
             Glide.with(context)
                 .load(url)
                 .diskCacheStrategy(DiskCacheStrategy.ALL)
@@ -770,20 +1100,36 @@ class HeroCarouselRowPresenter : RowPresenter() {
         }
     }
 
-    private fun itemAt(adapter: ObjectAdapter, index: Int): Title? =
-        if (index in 0 until adapter.size()) adapter.get(index) as? Title else null
+    private fun itemAt(adapter: ObjectAdapter, index: Int): Any? =
+        if (index in 0 until adapter.size()) adapter.get(index) else null
 
     private fun currentItem(holder: ViewHolder): Any? = holder.adapter?.let { itemAt(it, holder.selectedIndex) }
 
-    private fun paletteColorFor(item: Title): Int = fallbackPalette[item.id % fallbackPalette.size]
+    private fun paletteColorFor(id: Any?): Int {
+        val hash = id?.hashCode() ?: 0
+        val index = Math.abs(hash) % fallbackPalette.size
+        return fallbackPalette[index]
+    }
 
-    private fun buildMetaLine(title: Title): String {
-        val typeLabel = if (title.mediaType == "tv") "Series" else "Movie"
+    private fun formatDuration(durationSeconds: Int): String {
+        if (durationSeconds <= 0) return ""
+        val hours = durationSeconds / 3600
+        val minutes = (durationSeconds % 3600) / 60
+        return when {
+            hours > 0 && minutes > 0 -> "${hours}h ${minutes}m"
+            hours > 0 -> "${hours}h"
+            minutes > 0 -> "${minutes}m"
+            else -> ""
+        }
+    }
+
+    private fun buildMetaLineForTitle(title: Title): String {
+        val durationText = formatDuration(title.durationSeconds)
         val parts = listOfNotNull(
             title.year.takeIf { it.isNotBlank() },
-            title.durationOrSeasons.takeIf { it.isNotBlank() } ?: typeLabel,
             title.genre.takeIf { it.isNotBlank() },
-            "★ %.1f".format(title.rating)
+            durationText.takeIf { it.isNotBlank() } ?: title.durationOrSeasons.takeIf { it.isNotBlank() },
+            if (title.rating > 0.0) "★ %.1f".format(title.rating) else null
         )
         return parts.joinToString("  •  ")
     }
@@ -831,6 +1177,13 @@ class HeroCarouselRowPresenter : RowPresenter() {
 
     private fun startAutoRotate(holder: ViewHolder) {
         stopAutoRotate(holder)
+        val autoRotateEnabled = railCommonData?.screenWidget?.autoRotate ?: true
+        if (!autoRotateEnabled) return
+
+        val duration = railCommonData?.screenWidget?.autoRotateDuration?.takeIf { it > 0 }
+            ?: (AUTO_ROTATE_INTERVAL_MS / 1000).toInt()
+        val intervalMs = duration * 1000L
+
         val runnable = object : Runnable {
             override fun run() {
                 val adapter = holder.adapter
@@ -841,11 +1194,11 @@ class HeroCarouselRowPresenter : RowPresenter() {
                         drainPendingAdvance(holder)
                     }
                 }
-                holder.autoRotateHandler.postDelayed(this, AUTO_ROTATE_INTERVAL_MS)
+                holder.autoRotateHandler.postDelayed(this, intervalMs)
             }
         }
         holder.autoRotateRunnable = runnable
-        holder.autoRotateHandler.postDelayed(runnable, AUTO_ROTATE_INTERVAL_MS)
+        holder.autoRotateHandler.postDelayed(runnable, intervalMs)
     }
 
     private fun stopAutoRotate(holder: ViewHolder) {
@@ -854,177 +1207,78 @@ class HeroCarouselRowPresenter : RowPresenter() {
     }
 
     // ========================================================================================
-    // Hardware-Accelerated Trailer Video Playback (TextureView + MediaPlayer)
+    // Hardware-Accelerated Trailer Video Playback (Media3 ExoPlayer + TextureView)
     // ========================================================================================
 
-    private fun scheduleTrailer(holder: ViewHolder, delayMs: Long = TRAILER_DELAY_MS) {
-        stopTrailer(holder, resetAlpha = true)
-        // Trailer video playback temporarily disabled per user instruction
-    }
+    private fun scheduleTrailer(holder: ViewHolder) {
+        cancelPendingAutoplay()
 
-    private fun startTrailerPlayback(holder: ViewHolder) {
         if (holder.isShifting || holder.cardViews.isEmpty()) return
         val adapter = holder.adapter ?: return
-        val currentTitle = itemAt(adapter, holder.selectedIndex) ?: return
-        val videoUrl = currentTitle.videoUrl ?: return
+        val currentItem = itemAt(adapter, holder.selectedIndex) ?: return
+        val trailerUrl = resolveAsset(holder.stack.context, currentItem, true)?.trailerUrl
+        if (trailerUrl.isNullOrEmpty()) return
 
+        val runnable = Runnable {
+            if (!holder.card.hasFocus()) return@Runnable
+            if (holder.isShifting || holder.cardViews.isEmpty()) return@Runnable
+            startTrailerPlayback(holder, trailerUrl)
+        }
+        pendingAutoplayRunnable = runnable
+        autoplayHandler.postDelayed(runnable, FOCUS_HOLD_BEFORE_AUTOPLAY_MS)
+    }
+
+    private fun cancelPendingAutoplay() {
+        pendingAutoplayRunnable?.let { autoplayHandler.removeCallbacks(it) }
+        pendingAutoplayRunnable = null
+    }
+
+    private fun startTrailerPlayback(holder: ViewHolder, trailerUrl: String) {
+        if (holder.isShifting || holder.cardViews.isEmpty()) return
         val activeCardSlot = holder.cardViews[0]
         val textureView = activeCardSlot.textureView
         val context = holder.stack.context
 
-        stopTrailer(holder, resetAlpha = false)
-
-        val startPlayer = {
-            try {
-                val mp = MediaPlayer().apply {
-                    setAudioAttributes(
-                        AudioAttributes.Builder()
-                            .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE)
-                            .setUsage(AudioAttributes.USAGE_MEDIA)
-                            .build()
-                    )
-                    try {
-                        if (videoUrl.startsWith("http://") || videoUrl.startsWith("https://")) {
-                            setDataSource(videoUrl)
-                        } else {
-                            val afd = context.resources.openRawResourceFd(R.raw.sample_trailer)
-                            setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
-                            afd.close()
-                        }
-                    } catch (e: Exception) {
-                        val afd = context.resources.openRawResourceFd(R.raw.sample_trailer)
-                        setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
-                        afd.close()
-                    }
-                    setSurface(Surface(textureView.surfaceTexture))
-                    setOnVideoSizeChangedListener { _, width, height ->
-                        adjustTextureViewAspectRatio(textureView, width, height)
-                    }
-                    setOnPreparedListener { player ->
-                        if (!holder.isShifting && holder.cardViews.isNotEmpty() && holder.cardViews[0] === activeCardSlot) {
-                            player.start()
-                            textureView.visibility = View.VISIBLE
-                            textureView.animate().cancel()
-                            textureView.animate()
-                                .alpha(1f)
-                                .setDuration(TRAILER_CROSSFADE_MS)
-                                .start()
-                            holder.isTrailerPlaying = true
-                        } else {
-                            try { player.release() } catch (_: Exception) {}
-                        }
-                    }
-                    setOnCompletionListener {
-                        // Trailer playback complete! Auto-change to next card matching JioHotstar
-                        stopTrailer(holder, resetAlpha = true)
-                        tryAdvance(holder, 1)
-                    }
-                    setOnErrorListener { _, _, _ ->
-                        // If streaming error occurred, fallback to local bundled trailer
-                        try {
-                            val fallbackMp = MediaPlayer().apply {
-                                val afd = context.resources.openRawResourceFd(R.raw.sample_trailer)
-                                setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
-                                afd.close()
-                                setSurface(Surface(textureView.surfaceTexture))
-                                setOnVideoSizeChangedListener { _, width, height ->
-                                    adjustTextureViewAspectRatio(textureView, width, height)
-                                }
-                                setOnPreparedListener { p ->
-                                    if (!holder.isShifting && holder.cardViews.isNotEmpty() && holder.cardViews[0] === activeCardSlot) {
-                                        p.start()
-                                        textureView.visibility = View.VISIBLE
-                                        textureView.animate().cancel()
-                                        textureView.animate()
-                                            .alpha(1f)
-                                            .setDuration(TRAILER_CROSSFADE_MS)
-                                            .start()
-                                        holder.isTrailerPlaying = true
-                                    } else {
-                                        try { p.release() } catch (_: Exception) {}
-                                    }
-                                }
-                                setOnCompletionListener {
-                                    stopTrailer(holder, resetAlpha = true)
-                                    tryAdvance(holder, 1)
-                                }
-                                prepareAsync()
-                            }
-                            holder.mediaPlayer?.release()
-                            holder.mediaPlayer = fallbackMp
-                        } catch (_: Exception) {
-                            stopTrailer(holder, resetAlpha = true)
-                        }
-                        true
-                    }
-                    prepareAsync()
-                }
-                holder.mediaPlayer = mp
-                holder.activePlayingTextureView = textureView
-            } catch (e: Exception) {
-                stopTrailer(holder, resetAlpha = true)
-            }
+        // Stop previous active card if any
+        if (activeHolder !== holder) {
+            activeHolder?.revertToPoster()
         }
+        activeHolder = holder
 
-        if (textureView.isAvailable && textureView.surfaceTexture != null) {
-            startPlayer()
-        } else {
-            textureView.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
-                override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
-                    if (holder.cardViews.isNotEmpty() && holder.cardViews[0] === activeCardSlot) {
-                        startPlayer()
-                    }
-                }
-                override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {}
-                override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean = true
-                override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {}
-            }
-            textureView.visibility = View.VISIBLE
-        }
-    }
+        val player = getOrCreatePlayer(context)
+        player.stop()
+        player.clearMediaItems()
+        player.setVideoTextureView(textureView)
+        player.setMediaItem(MediaItem.fromUri(trailerUrl))
+        player.repeatMode = Player.REPEAT_MODE_ONE
+        player.prepare()
+        player.playWhenReady = true
 
-    private fun adjustTextureViewAspectRatio(textureView: TextureView, videoWidth: Int, videoHeight: Int) {
-        val viewWidth = textureView.width.toFloat()
-        val viewHeight = textureView.height.toFloat()
-        if (viewWidth <= 0 || viewHeight <= 0 || videoWidth <= 0 || videoHeight <= 0) return
+        holder.activePlayingTextureView = textureView
+        holder.isTrailerPlaying = true
 
-        val videoAspect = videoWidth.toFloat() / videoHeight.toFloat()
-        val viewAspect = viewWidth / viewHeight
-        val scaleX: Float
-        val scaleY: Float
-        if (videoAspect > viewAspect) {
-            scaleX = videoAspect / viewAspect
-            scaleY = 1f
-        } else {
-            scaleX = 1f
-            scaleY = viewAspect / videoAspect
-        }
-        val matrix = Matrix()
-        matrix.setScale(scaleX, scaleY, viewWidth / 2f, viewHeight / 2f)
-        textureView.setTransform(matrix)
+        textureView.visibility = View.VISIBLE
+        textureView.alpha = 0f
+        textureView.animate().cancel()
+        textureView.animate()
+            .alpha(1f)
+            .setDuration(TRAILER_CROSSFADE_MS)
+            .start()
     }
 
     private fun stopTrailer(holder: ViewHolder, resetAlpha: Boolean = true) {
-        holder.trailerRunnable?.let { holder.trailerHandler.removeCallbacks(it) }
-        holder.trailerRunnable = null
-        holder.isTrailerPlaying = false
-
-        val mp = holder.mediaPlayer
-        holder.mediaPlayer = null
-        if (mp != null) {
-            try {
-                mp.stop()
-                mp.reset()
-                mp.release()
-            } catch (_: Exception) {}
+        cancelPendingAutoplay()
+        if (activeHolder === holder) {
+            sharedPlayer?.apply {
+                playWhenReady = false
+                stop()
+                clearMediaItems()
+                setVideoTextureView(null)
+            }
+            activeHolder = null
         }
-
-        val tv = holder.activePlayingTextureView
-        holder.activePlayingTextureView = null
-        if (tv != null && resetAlpha) {
-            tv.animate().cancel()
-            tv.alpha = 0f
-            tv.visibility = View.GONE
+        if (resetAlpha) {
+            holder.revertToPoster()
         }
     }
 }
