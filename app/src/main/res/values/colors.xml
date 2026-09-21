@@ -2,7 +2,24 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
-    <color name="browse_background">#FF0B0E14</color>
-    <color name="brand_accent">#FF1CE783</color>
-    <color name="banner_background">#FF1A1F2B</color>
+    <color name="browse_background">#FF080B11</color>
+    <color name="brand_accent">#FF00E5FF</color>
+    <color name="banner_background">#FF121724</color>
+
+    <!-- JioHotstar Theme Colors -->
+    <color name="hotstar_slate_black">#FF0A0E17</color>
+    <color name="hotstar_card_surface">#FF141926</color>
+    <color name="hotstar_cyan">#FF00E5FF</color>
+    <color name="hotstar_gold">#FFFFB800</color>
+    <color name="hotstar_red">#FFE50914</color>
+    <color name="hotstar_badge_blue">#FF0A66C2</color>
+
+    <color name="hotstar_text_primary">#FFFFFFFF</color>
+    <color name="hotstar_text_secondary">#D9FFFFFF</color>
+    <color name="hotstar_text_muted">#B3D1D5DB</color>
+
+    <color name="hotstar_btn_primary_bg">#FFFFFFFF</color>
+    <color name="hotstar_btn_primary_text">#FF0A0E17</color>
+    <color name="hotstar_btn_secondary_bg">#2EFFFFFF</color>
+    <color name="hotstar_btn_secondary_stroke">#4DFFFFFF</color>
 </resources>

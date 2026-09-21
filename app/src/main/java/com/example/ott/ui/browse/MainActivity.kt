@@ -36,20 +36,31 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT && event.action == KeyEvent.ACTION_DOWN) {
-            val before = currentFocus
-            val handled = super.dispatchKeyEvent(event)
-            // Leanback's HorizontalGridView moves focus to the previous card asynchronously, so
-            // checking currentFocus immediately would misfire on every interior column. Defer to
-            // the next message loop turn, and only escape to the nav if the key truly went unhandled.
-            if (!handled && before != null && !isNavDescendant(before)) {
-                before.post {
-                    if (currentFocus === before) {
-                        navContainer.requestFocus()
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+                val before = currentFocus
+                val handled = super.dispatchKeyEvent(event)
+                // Leanback's HorizontalGridView moves focus to the previous card asynchronously, so
+                // checking currentFocus immediately would misfire on every interior column. Defer to
+                // the next message loop turn, and only escape to the nav if the key truly went unhandled.
+                if (!handled && before != null && !isNavDescendant(before)) {
+                    before.post {
+                        if (currentFocus === before) {
+                            (selectedNavIcon ?: findViewById<View>(R.id.nav_home)).requestFocus()
+                        }
+                    }
+                }
+                return handled
+            } else if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                val focused = currentFocus
+                if (focused != null && isNavDescendant(focused)) {
+                    val hero = findViewById<View>(R.id.hero_card)
+                    if (hero != null && hero.isShown) {
+                        hero.requestFocus()
+                        return true
                     }
                 }
             }
-            return handled
         }
         return super.dispatchKeyEvent(event)
     }
@@ -144,7 +155,7 @@ class MainActivity : FragmentActivity() {
 
     companion object {
         private const val TAG = "MainActivity"
-        private const val COLLAPSED_WIDTH_DP = 88
+        private const val COLLAPSED_WIDTH_DP = 64
         private const val EXPANDED_WIDTH_DP = 240
         private const val NAV_ANIM_DURATION = 220L
     }

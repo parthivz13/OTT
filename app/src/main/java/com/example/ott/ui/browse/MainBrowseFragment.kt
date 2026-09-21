@@ -27,6 +27,10 @@ import com.example.ott.data.model.Title
 import com.example.ott.ui.rows.common.SimpleCardPresenter
 import com.example.ott.ui.rows.stack.HeroCarouselRow
 import com.example.ott.ui.rows.stack.HeroCarouselRowPresenter
+import com.example.ott.ui.rows.top10.Top10CardPresenter
+import com.example.ott.ui.rows.top10.Top10Item
+import com.example.ott.ui.rows.top10.Top10Row
+import com.example.ott.ui.rows.top10.Top10RowPresenter
 
 // Rail-specific presenters (e.g. HeroCarouselRowPresenter) are registered via a
 // ClassPresenterSelector alongside the stock ListRowPresenter, so new rail designs can be
@@ -50,20 +54,35 @@ class MainBrowseFragment : BrowseSupportFragment() {
 
         val presenterSelector = ClassPresenterSelector().apply {
             addClassPresenter(HeroCarouselRow::class.java, HeroCarouselRowPresenter())
+            addClassPresenter(Top10Row::class.java, Top10RowPresenter())
             addClassPresenter(ListRow::class.java, ListRowPresenter())
         }
         rowsAdapter = ArrayObjectAdapter(presenterSelector)
         adapter = rowsAdapter
 
         onItemViewClickedListener = OnItemViewClickedListener { _, item, _, _ ->
-            if (item is Title) {
-                // Details screen is a future phase; log the click for now.
-                Log.d(TAG, "Clicked: ${item.name}")
+            val title = when (item) {
+                is Title -> item
+                is Top10Item -> item.title
+                else -> null
+            }
+            if (title != null) {
+                Log.d(TAG, "Clicked: ${title.name}")
+                android.widget.Toast.makeText(
+                    requireContext(),
+                    "Playing: ${title.name} (${title.qualityTag})",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
             }
         }
 
         onItemViewSelectedListener = OnItemViewSelectedListener { _, item, _, _ ->
-            if (item is Title) scheduleBackgroundUpdate(item)
+            val title = when (item) {
+                is Title -> item
+                is Top10Item -> item.title
+                else -> null
+            }
+            if (title != null) scheduleBackgroundUpdate(title)
         }
     }
 
@@ -113,6 +132,16 @@ class MainBrowseFragment : BrowseSupportFragment() {
             }
             val header = HeaderItem(HERO_ROW_ID, it.title)
             rowsAdapter.add(HeroCarouselRow(header, heroAdapter))
+
+            // Netflix-style Top 10 curated row directly below Hero Carousel
+            val top10Adapter = ArrayObjectAdapter(Top10CardPresenter()).apply {
+                val top10List = it.items.take(10).mapIndexed { idx, title ->
+                    Top10Item(rank = idx + 1, title = title)
+                }
+                addAll(0, top10List)
+            }
+            val top10Header = HeaderItem(TOP_10_ROW_ID, "🔥 Top 10 Shows Today")
+            rowsAdapter.add(Top10Row(top10Header, top10Adapter))
         }
 
         groups.forEachIndexed { index, group ->
@@ -153,6 +182,7 @@ class MainBrowseFragment : BrowseSupportFragment() {
         private const val TAG = "MainBrowseFragment"
         private const val BACKGROUND_UPDATE_DELAY_MS = 300L
         private const val HERO_ROW_ID = -1L
+        private const val TOP_10_ROW_ID = -2L
         private const val HERO_CAROUSEL_ASSET_LIMIT = 10
     }
 }

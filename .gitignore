@@ -19,3 +19,5 @@ local.properties
 /*.png
 /*.txt
 /*.xml
+/*.mp4
+/*_frames/
