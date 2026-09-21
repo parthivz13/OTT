@@ -10,7 +10,8 @@ data class ShowDto(
     @SerializedName("rating") val rating: RatingDto?,
     @SerializedName("image") val image: ImageDto?,
     @SerializedName("summary") val summary: String?,
-    @SerializedName("weight") val weight: Int?
+    @SerializedName("weight") val weight: Int?,
+    @SerializedName("runtime") val runtime: Int?
 )
 
 data class RatingDto(

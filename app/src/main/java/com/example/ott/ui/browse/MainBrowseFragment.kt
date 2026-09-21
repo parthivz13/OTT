@@ -25,6 +25,9 @@ import com.bumptech.glide.request.transition.Transition
 import com.example.ott.R
 import com.example.ott.data.model.Title
 import com.example.ott.ui.rows.common.SimpleCardPresenter
+import com.example.ott.ui.rows.hero.ExpandableHeroCarouselRow
+import com.example.ott.ui.rows.hero.ExpandableHeroCarouselRowPresenter
+import com.example.ott.ui.rows.hero.HeroCarouselCardPresenter
 import com.example.ott.ui.rows.stack.HeroCarouselRow
 import com.example.ott.ui.rows.stack.HeroCarouselRowPresenter
 import com.example.ott.ui.rows.top10.Top10CardPresenter
@@ -32,9 +35,8 @@ import com.example.ott.ui.rows.top10.Top10Item
 import com.example.ott.ui.rows.top10.Top10Row
 import com.example.ott.ui.rows.top10.Top10RowPresenter
 
-// Rail-specific presenters (e.g. HeroCarouselRowPresenter) are registered via a
-// ClassPresenterSelector alongside the stock ListRowPresenter, so new rail designs can be
-// added without touching this fragment's plumbing.
+// Rail-specific presenters are registered via a ClassPresenterSelector alongside the
+// stock ListRowPresenter, so all rail designs render seamlessly.
 class MainBrowseFragment : BrowseSupportFragment() {
 
     private val viewModel: BrowseViewModel by viewModels()
@@ -55,7 +57,21 @@ class MainBrowseFragment : BrowseSupportFragment() {
         val presenterSelector = ClassPresenterSelector().apply {
             addClassPresenter(HeroCarouselRow::class.java, HeroCarouselRowPresenter())
             addClassPresenter(Top10Row::class.java, Top10RowPresenter())
-            addClassPresenter(ListRow::class.java, ListRowPresenter())
+            addClassPresenter(ExpandableHeroCarouselRow::class.java, ExpandableHeroCarouselRowPresenter())
+            addClassPresenter(ListRow::class.java, ListRowPresenter().apply {
+                shadowEnabled = false
+                selectEffectEnabled = false
+                val rowHeaderFacet = androidx.leanback.widget.ItemAlignmentFacet().apply {
+                    alignmentDefs = arrayOf(
+                        androidx.leanback.widget.ItemAlignmentFacet.ItemAlignmentDef().apply {
+                            setItemAlignmentViewId(androidx.leanback.R.id.row_header)
+                            itemAlignmentOffset = 0
+                            itemAlignmentOffsetPercent = 0f
+                        }
+                    )
+                }
+                setFacet(androidx.leanback.widget.ItemAlignmentFacet::class.java, rowHeaderFacet)
+            })
         }
         rowsAdapter = ArrayObjectAdapter(presenterSelector)
         adapter = rowsAdapter
@@ -105,17 +121,16 @@ class MainBrowseFragment : BrowseSupportFragment() {
 
     override fun onStart() {
         super.onStart()
-        // BrowseSupportFragment reserves ~167dp above the row list as a window-alignment keyline
-        // for the title bar; this is applied programmatically, not via styles, so theme attrs
-        // can't override it. Zero it directly now that the title bar is removed.
         rowsSupportFragment?.verticalGridView?.let { gridView ->
-            gridView.windowAlignment = androidx.leanback.widget.BaseGridView.WINDOW_ALIGN_NO_EDGE
-            gridView.setWindowAlignmentOffset(0)
+            val density = resources.displayMetrics.density
+            gridView.windowAlignment = androidx.leanback.widget.BaseGridView.WINDOW_ALIGN_LOW_EDGE
+            gridView.setWindowAlignmentOffset((28 * density).toInt())
             gridView.windowAlignmentOffsetPercent = androidx.leanback.widget.BaseGridView.WINDOW_ALIGN_OFFSET_PERCENT_DISABLED
         }
     }
 
     override fun onDestroyView() {
+        HeroCarouselCardPresenter.releasePlayer()
         pendingBackgroundUpdate?.let { backgroundHandler.removeCallbacks(it) }
         super.onDestroyView()
     }
@@ -123,17 +138,16 @@ class MainBrowseFragment : BrowseSupportFragment() {
     private fun showRows(groups: List<RowGroup>) {
         rowsAdapter.clear()
 
-        // Hero carousel reuses "Popular Shows" as its content, so exclude that group below
-        // to avoid showing it twice.
         val spotlight = groups.firstOrNull()
         spotlight?.let {
-            val heroAdapter = ArrayObjectAdapter().apply {
+            // 1. Current JioHotstar 2.5D Stacked Hero Carousel in FIRST POSITION
+            val stackHeroAdapter = ArrayObjectAdapter().apply {
                 addAll(0, it.items.take(HERO_CAROUSEL_ASSET_LIMIT))
             }
-            val header = HeaderItem(HERO_ROW_ID, it.title)
-            rowsAdapter.add(HeroCarouselRow(header, heroAdapter))
+            val stackHeader = HeaderItem(HERO_STACK_ROW_ID, it.title)
+            rowsAdapter.add(HeroCarouselRow(stackHeader, stackHeroAdapter))
 
-            // Netflix-style Top 10 curated row directly below Hero Carousel
+            // 2. Netflix-style Top 10 curated row in SECOND POSITION
             val top10Adapter = ArrayObjectAdapter(Top10CardPresenter()).apply {
                 val top10List = it.items.take(10).mapIndexed { idx, title ->
                     Top10Item(rank = idx + 1, title = title)
@@ -142,8 +156,16 @@ class MainBrowseFragment : BrowseSupportFragment() {
             }
             val top10Header = HeaderItem(TOP_10_ROW_ID, "🔥 Top 10 Shows Today")
             rowsAdapter.add(Top10Row(top10Header, top10Adapter))
+
+            // 3. Expandable Hero Carousel (Separate, self-contained) in THIRD POSITION
+            val expandableHeroAdapter = ArrayObjectAdapter(HeroCarouselCardPresenter()).apply {
+                addAll(0, it.items.take(HERO_CAROUSEL_ASSET_LIMIT))
+            }
+            val expandableHeader = HeaderItem(EXPANDABLE_HERO_ROW_ID, "✨ Featured Spotlight")
+            rowsAdapter.add(ExpandableHeroCarouselRow(expandableHeader, expandableHeroAdapter))
         }
 
+        // 4. Remaining genre rows in FOURTH POSITION+
         groups.forEachIndexed { index, group ->
             if (group === spotlight) return@forEachIndexed
             val cardAdapter = ArrayObjectAdapter(SimpleCardPresenter()).apply {
@@ -181,8 +203,9 @@ class MainBrowseFragment : BrowseSupportFragment() {
     companion object {
         private const val TAG = "MainBrowseFragment"
         private const val BACKGROUND_UPDATE_DELAY_MS = 300L
-        private const val HERO_ROW_ID = -1L
+        private const val HERO_STACK_ROW_ID = -1L
         private const val TOP_10_ROW_ID = -2L
+        private const val EXPANDABLE_HERO_ROW_ID = -3L
         private const val HERO_CAROUSEL_ASSET_LIMIT = 10
     }
 }

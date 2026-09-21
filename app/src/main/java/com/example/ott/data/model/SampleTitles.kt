@@ -169,6 +169,14 @@ object SampleTitles {
             qualityTag = "HD • 5.1 Audio"
         )
     ).mapIndexed { index, title ->
-        title.copy(videoUrl = sampleVideos[index % sampleVideos.size])
+        title.copy(
+            videoUrl = sampleVideos[index % sampleVideos.size],
+            trailerUrl = sampleVideos[index % sampleVideos.size],
+            durationSeconds = 5400 + (index * 420),
+            is4K = index % 2 == 0,
+            isHD = true,
+            isAD = index % 3 == 0,
+            seasonEpisode = "S1:E${index + 1}"
+        )
     }
 }
