@@ -8,6 +8,7 @@ import android.animation.ValueAnimator
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.LayoutInflater
@@ -148,6 +149,7 @@ class HeroCarouselRowPresenter(
         var slotsInitialized: Boolean = false
 
         var adapter: ObjectAdapter? = null
+        var adapterObserver: ObjectAdapter.DataObserver? = null
         var selectedIndex: Int = 0
         var isShifting: Boolean = false
         var pendingDelta: Int = 0
@@ -228,12 +230,12 @@ class HeroCarouselRowPresenter(
 
         // Focus Border & Auto-Rotation Sync
         viewHolder.card.setOnFocusChangeListener { _, hasFocus ->
-            /*viewHolder.focusBorder.animate().cancel()
+            viewHolder.focusBorder.animate().cancel()
             val targetAlpha = if (hasFocus) 1f else 0f
             viewHolder.focusBorder.animate()
                 .alpha(targetAlpha)
                 .setDuration(160L)
-                .start()*/
+                .start()
 
             carouselFocusListener?.onCarouselFocusChanged(hasFocus)
 
@@ -265,16 +267,99 @@ class HeroCarouselRowPresenter(
         return viewHolder
     }
 
+    private fun resolveAdapter(item: Any?): ObjectAdapter? {
+        return when (item) {
+            is ListRow -> item.adapter
+            is ObjectAdapter -> item
+            is RailCommonData -> {
+                railCommonData = item
+                null
+            }
+            else -> null
+        }
+    }
+
     override fun onBindRowViewHolder(vh: RowPresenter.ViewHolder, item: Any) {
         super.onBindRowViewHolder(vh, item)
         val holder = vh as ViewHolder
 
+        Log.e("DataChecker","bind")
         if (item is RailCommonData) {
             railCommonData = item
         }
 
         val adapter = resolveAdapter(item)
+        holder.adapterObserver?.let { holder.adapter?.unregisterObserver(it) }
         holder.adapter = adapter
+
+        val observer = object : ObjectAdapter.DataObserver() {
+            override fun onChanged() {
+                if (holder.slotsInitialized) {
+                    bindInitialState(holder)
+                }
+            }
+
+            override fun onItemRangeChanged(positionStart: Int, itemCount: Int) {
+                if (!holder.slotsInitialized) return
+                val currentAdapter = holder.adapter ?: return
+                val activeIdx = holder.selectedIndex
+                val endIdx = positionStart + itemCount
+
+                // If active slot was updated
+                if (activeIdx in positionStart until endIdx) {
+                    val activeItem = itemAt(currentAdapter, activeIdx)
+                    if (activeItem != null && holder.cardViews.isNotEmpty()) {
+                        loadAsset(holder.cardViews[0], activeItem, isFocused = true)
+                        bindTextViews(holder, activeItem)
+                        scheduleTrailer(holder)
+                    }
+                }
+                // If peek 1 slot was updated
+                if ((activeIdx + 1) in positionStart until endIdx) {
+                    val peek1Item = itemAt(currentAdapter, activeIdx + 1)
+                    if (holder.cardViews.size > 1) {
+                        if (peek1Item != null) {
+                            loadAsset(holder.cardViews[1], peek1Item, isFocused = false)
+                            holder.cardViews[1].card.visibility = View.VISIBLE
+                        } else {
+                            holder.cardViews[1].card.visibility = View.INVISIBLE
+                        }
+                    }
+                }
+                // If peek 2 slot was updated
+                if ((activeIdx + 2) in positionStart until endIdx) {
+                    val peek2Item = itemAt(currentAdapter, activeIdx + 2)
+                    if (holder.cardViews.size > 2) {
+                        if (peek2Item != null) {
+                            loadAsset(holder.cardViews[2], peek2Item, isFocused = false)
+                            holder.cardViews[2].card.visibility = View.VISIBLE
+                        } else {
+                            holder.cardViews[2].card.visibility = View.INVISIBLE
+                        }
+                    }
+                }
+                renderDots(holder, currentAdapter.size(), activeIdx)
+            }
+
+            override fun onItemRangeInserted(positionStart: Int, itemCount: Int) {
+                if (holder.slotsInitialized) {
+                    bindInitialState(holder)
+                }
+            }
+
+            override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) {
+                if (holder.slotsInitialized) {
+                    val currentAdapter = holder.adapter
+                    if (currentAdapter != null && holder.selectedIndex >= currentAdapter.size()) {
+                        holder.selectedIndex = (currentAdapter.size() - 1).coerceAtLeast(0)
+                    }
+                    bindInitialState(holder)
+                }
+            }
+        }
+        holder.adapterObserver = observer
+        adapter?.registerObserver(observer)
+
         holder.selectedIndex = 0
         if (holder.stack.isLaidOut && holder.stack.width > 0) {
             setupSlots(holder)
@@ -286,80 +371,13 @@ class HeroCarouselRowPresenter(
         startAutoRotate(holder)
     }
 
-    private fun resolveAdapter(item: Any): ObjectAdapter {
-        return when (item) {
-            is ListRow -> item.adapter
-            is Row -> {
-                try {
-                    val method = item.javaClass.getMethod("getAdapter")
-                    (method.invoke(item) as? ObjectAdapter) ?: ArrayObjectAdapter()
-                } catch (_: Exception) {
-                    ArrayObjectAdapter()
-                }
-            }
-            is ObjectAdapter -> item
-            is RailCommonData -> extractAdapterFromRail(item)
-            is List<*> -> ArrayObjectAdapter().apply { addAll(0, item.filterNotNull()) }
-            is Array<*> -> ArrayObjectAdapter().apply { addAll(0, item.filterNotNull()) }
-            is CustomAsset, is CustomKalturaAsset, is com.example.ott.EnveuCategoryServices.Asset, is Asset, is Title -> {
-                ArrayObjectAdapter().apply { add(item) }
-            }
-            else -> {
-                extractAdapterViaReflection(item) ?: ArrayObjectAdapter().apply { add(item) }
-            }
-        }
-    }
-
-    private fun extractAdapterFromRail(rail: RailCommonData): ObjectAdapter {
-        val adapter = ArrayObjectAdapter()
-        val list = rail.assets
-            ?: rail.customAssets
-            ?: rail.customKalturaAssets
-            ?: rail.enveuAssets
-            ?: rail.items
-        if (!list.isNullOrEmpty()) {
-            adapter.addAll(0, list)
-        }
-        return adapter
-    }
-
-    private fun extractAdapterViaReflection(item: Any): ObjectAdapter? {
-        val methods = listOf("getAssets", "getItems", "getAssetList", "getData", "getList")
-        for (name in methods) {
-            try {
-                val method = item.javaClass.getMethod(name)
-                val result = method.invoke(item)
-                if (result is List<*>) {
-                    return ArrayObjectAdapter().apply { addAll(0, result.filterNotNull()) }
-                }
-                if (result is ObjectAdapter) {
-                    return result
-                }
-            } catch (_: Exception) {
-            }
-        }
-        val fields = listOf("assets", "items", "assetList", "data", "list")
-        for (name in fields) {
-            try {
-                val field = item.javaClass.getDeclaredField(name).apply { isAccessible = true }
-                val result = field.get(item)
-                if (result is List<*>) {
-                    return ArrayObjectAdapter().apply { addAll(0, result.filterNotNull()) }
-                }
-                if (result is ObjectAdapter) {
-                    return result
-                }
-            } catch (_: Exception) {
-            }
-        }
-        return null
-    }
-
     override fun onUnbindRowViewHolder(vh: RowPresenter.ViewHolder) {
         super.onUnbindRowViewHolder(vh)
         val holder = vh as ViewHolder
         stopTrailer(holder)
         stopAutoRotate(holder)
+        holder.adapterObserver?.let { holder.adapter?.unregisterObserver(it) }
+        holder.adapterObserver = null
         holder.adapter = null
     }
 
@@ -1180,7 +1198,7 @@ class HeroCarouselRowPresenter(
         val autoRotateEnabled = railCommonData?.screenWidget?.autoRotate ?: true
         if (!autoRotateEnabled) return
 
-        val duration = railCommonData?.screenWidget?.autoRotateDuration?.takeIf { it > 0 }
+        val duration = railCommonData?.screenWidget?.autoRotateDuration?.let { if (it > 0) it else null }
             ?: (AUTO_ROTATE_INTERVAL_MS / 1000).toInt()
         val intervalMs = duration * 1000L
 

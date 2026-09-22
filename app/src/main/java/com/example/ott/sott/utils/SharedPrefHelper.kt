@@ -22,4 +22,6 @@ class SharedPrefHelper private constructor() {
     fun getTrailerFromMap(context: Context, externalId: String): Any? {
         return trailerMap[externalId]
     }
+
+    fun getUserFirstName(): String? = "You"
 }

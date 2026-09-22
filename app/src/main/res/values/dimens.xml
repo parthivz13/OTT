@@ -7,4 +7,6 @@
     <dimen name="carousel_unselected_height">216dp</dimen>
     <dimen name="hero_carousel_unfocused_top_margin">21dp</dimen>
     <dimen name="hero_carousel_card_corner_radius">12dp</dimen>
+    <dimen name="row_alignment_offset">24dp</dimen>
+    <dimen name="row_alignment_offset1">48dp</dimen>
 </resources>

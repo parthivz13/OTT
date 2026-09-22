@@ -1,21 +1,17 @@
 package com.example.ott.sott.networking
 
+import com.example.ott.sott.models.BaseCategory
 import com.example.ott.sott.models.CustomAsset
 import com.example.ott.sott.models.CustomKalturaAsset
+import com.example.ott.sott.utils.enums.RailTypes
 import com.example.ott.types.Asset
 
-data class ScreenWidget(
-    var Id: String? = null,
-    var name: String? = null,
-    var type: String? = null,
-    var contentImageType: String? = null,
-    var autoRotate: Boolean? = true,
-    var autoRotateDuration: Int? = 5
-)
+typealias ScreenWidget = BaseCategory
 
 data class RailCommonData(
-    var screenWidget: ScreenWidget? = null,
-    var assets: List<Asset>? = null,
+    var railType: RailTypes = RailTypes.HORIZONTAL_LDS_LANDSCAPE,
+    var screenWidget: BaseCategory? = null,
+    var assets: ArrayList<Asset> = ArrayList(),
     var customAssets: List<CustomAsset>? = null,
     var customKalturaAssets: List<CustomKalturaAsset>? = null,
     var enveuAssets: List<com.example.ott.EnveuCategoryServices.Asset>? = null,
