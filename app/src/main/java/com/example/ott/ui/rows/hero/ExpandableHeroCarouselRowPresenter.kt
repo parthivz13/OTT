@@ -15,9 +15,13 @@ import androidx.leanback.widget.RowPresenter
  * - Alignment & layout configuration so expanding 16:9 cards stay visible without clipping.
  * - Row-level focus tracking: pauses/stops trailer video when focus leaves the carousel rail.
  * - Automatic lifecycle teardown on unbind/recycle without fragment coupling.
+ *
+ * @param keepExpandedWhenUnfocused When true, the last focused card stays expanded after focus
+ *   leaves the row (hero carousel mode). When false, it collapses on focus leave (default).
  */
 class ExpandableHeroCarouselRowPresenter(
-    private val carouselFocusListener: CarouselFocusListener? = null
+    private val carouselFocusListener: CarouselFocusListener? = null,
+    val keepExpandedWhenUnfocused: Boolean = false
 ) : ListRowPresenter() {
 
     init {
@@ -66,6 +70,11 @@ class ExpandableHeroCarouselRowPresenter(
             if (!hasFocus) {
                 HeroCarouselCardPresenter.stopActiveVideo()
                 carouselFocusListener?.onCarouselFocusChanged(false)
+
+                // If this row does NOT keep cards expanded, collapse the last expanded card now
+                if (!keepExpandedWhenUnfocused) {
+                    HeroCarouselCardPresenter.collapseLastExpanded()
+                }
             } else {
                 carouselFocusListener?.onCarouselFocusChanged(true)
             }
@@ -83,5 +92,7 @@ class ExpandableHeroCarouselRowPresenter(
             HeroCarouselAutoSlideController.unregisterRow(it.config.rowId)
         }
         HeroCarouselCardPresenter.stopActiveVideo()
+        // Always collapse expanded state on row recycle
+        HeroCarouselCardPresenter.collapseLastExpanded()
     }
 }

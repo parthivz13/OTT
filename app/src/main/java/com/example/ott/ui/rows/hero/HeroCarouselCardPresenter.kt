@@ -41,7 +41,13 @@ import com.example.ott.types.Asset
 class HeroCarouselCardPresenter(
     var railCommonData: RailCommonData = RailCommonData(),
     private val carouselFocusListener: CarouselFocusListener? = null,
-    private val onItemClicked: ((Any) -> Unit)? = null
+    private val onItemClicked: ((Any) -> Unit)? = null,
+    /**
+     * When true the presenter behaves as a hero carousel:
+     * the last focused card stays expanded even after focus leaves the row.
+     * When false (default) the card collapses as soon as it loses focus.
+     */
+    val keepExpandedWhenUnfocused: Boolean = false
 ) : Presenter() {
 
     private val rowId: String
@@ -80,6 +86,44 @@ class HeroCarouselCardPresenter(
 
             activeHolder?.revertToPoster()
             activeHolder = null
+        }
+
+        /**
+         * The card that was last focused and is kept expanded when
+         * keepExpandedWhenUnfocused = true and focus leaves the row.
+         */
+        var lastExpandedHolder: CardViewHolder? = null
+            private set
+
+        /**
+         * Collapse and clear the pinned expanded card.
+         * Call this when the row loses focus or is unbound.
+         */
+        fun collapseLastExpanded() {
+            lastExpandedHolder?.let { holder ->
+                holder.anim?.cancel()
+                // Animate collapse back to poster/small size
+                val context = holder.rootView.context
+                val unselectedW = context.resources.getDimensionPixelSize(R.dimen.carousel_unselected_width)
+                val unselectedH = context.resources.getDimensionPixelSize(R.dimen.carousel_unselected_height)
+                val unselectedTopMargin = context.resources.getDimensionPixelSize(R.dimen.hero_carousel_unfocused_top_margin)
+                holder.basicDetailsLayout.visibility = View.GONE
+                holder.bgShadow.visibility = View.GONE
+                holder.backdrop.alpha = 0f
+                holder.poster.alpha = 1f
+                holder.focusBorder.alpha = 0f
+                val lp = holder.cardContainer.layoutParams
+                lp.width = unselectedW
+                lp.height = unselectedH
+                if (lp is ViewGroup.MarginLayoutParams) lp.topMargin = unselectedTopMargin
+                holder.cardContainer.layoutParams = lp
+            }
+            lastExpandedHolder = null
+        }
+
+        /** Called by the card itself to register or clear the pin. */
+        internal fun pinExpanded(holder: CardViewHolder?) {
+            lastExpandedHolder = holder
         }
 
         fun releasePlayer() {
@@ -557,6 +601,11 @@ class HeroCarouselCardPresenter(
                     HeroCarouselAutoSlideController.notifyUserInteraction(rowId)
                 }
 
+                // If another card was pinned expanded in this row, collapse it first
+                if (lastExpandedHolder !== null && lastExpandedHolder !== holder) {
+                    collapseLastExpanded()
+                }
+
                 // Smooth fluid expansion animation
                 animateCardExpansion(holder, hasFocus = true, animate = true)
 
@@ -572,9 +621,6 @@ class HeroCarouselCardPresenter(
                     scheduleAutoplay(holder)
                 }
             } else {
-                // Smooth fluid collapse animation
-                animateCardExpansion(holder, hasFocus = false, animate = true)
-
                 cancelPendingAutoplay()
 
                 if (activeHolder === holder) {
@@ -587,9 +633,21 @@ class HeroCarouselCardPresenter(
                     activeHolder = null
                 }
 
+                // After focus settles, decide whether to collapse or keep expanded
                 holder.rootView.post {
                     val focusedView = holder.rootView.rootView.findFocus()
                     val isStillInside = focusedView?.let { isViewInsideCarousel(it) } ?: false
+
+                    if (keepExpandedWhenUnfocused && !isStillInside) {
+                        // Focus left the entire row — pin this card as the visible expanded state
+                        pinExpanded(holder)
+                        // Don't collapse the card visually
+                    } else {
+                        // Either within row (another card getting focus) or collapse mode
+                        if (lastExpandedHolder === holder) pinExpanded(null)
+                        animateCardExpansion(holder, hasFocus = false, animate = true)
+                    }
+
                     if (!isStillInside) {
                         notifyCarouselFocus(false)
                     }
@@ -707,6 +765,10 @@ class HeroCarouselCardPresenter(
         val holder = viewHolder as? CardViewHolder ?: return
         if (activeHolder === holder) {
             stopActiveVideo()
+        }
+        // If this was the pinned expanded card, clear the pin and collapse it
+        if (lastExpandedHolder === holder) {
+            collapseLastExpanded()
         }
         cancelPendingAutoplay()
         holder.anim?.cancel()

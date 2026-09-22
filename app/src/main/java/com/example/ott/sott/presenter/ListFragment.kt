@@ -88,7 +88,10 @@ class ListFragment : RowsSupportFragment() {
     }
 
     private val heroCarouselRowPresenter = HeroCarouselRowPresenter()
-    private val expandableHeroRowPresenter = ExpandableHeroCarouselRowPresenter().apply {
+    // Movies carousel: standard expandable behaviour (last card collapses when focus leaves)
+    private val expandableHeroRowPresenter = ExpandableHeroCarouselRowPresenter(
+        keepExpandedWhenUnfocused = false
+    ).apply {
         headerPresenter = IconHeaderItemPresenter()
     }
 
@@ -510,7 +513,12 @@ class ListFragment : RowsSupportFragment() {
         presenterCache[cacheKey]?.let { return it }
 
         val presenter = when (railType) {
-            RailTypes.CAROUSEL_LDS_LANDSCAPE -> HeroCarouselCardPresenter(result)
+            RailTypes.CAROUSEL_LDS_LANDSCAPE -> HeroCarouselCardPresenter(
+                result,
+                // On HOME screen the carousel keeps the last focused card expanded (hero mode).
+                // On MOVIES the card collapses when focus leaves (expandable mode).
+                keepExpandedWhenUnfocused = (currentScreenType == ScreenType.HOME)
+            )
             RailTypes.HORIZONTAL_LDS_LANDSCAPE -> {
                 when {
                     isContinueWatching -> ContinueWatchingPresenter(result)
