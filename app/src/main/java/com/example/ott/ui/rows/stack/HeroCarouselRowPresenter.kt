@@ -21,6 +21,8 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.cardview.widget.CardView
 import androidx.core.view.doOnLayout
+import androidx.leanback.widget.ListRow
+import androidx.leanback.widget.ObjectAdapter
 import androidx.leanback.widget.RowPresenter
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -145,6 +147,10 @@ class HeroCarouselRowPresenter(
         // Asset list: populated per-position via bindAsset(holder, position, item)
         val items = mutableListOf<Any>()
 
+        // Tracks the currently observed adapter so we can unregister on unbind
+        var boundAdapter: ObjectAdapter? = null
+        var dataObserver: ObjectAdapter.DataObserver? = null
+
         var activeRailData: RailCommonData? = null
         var selectedIndex: Int = 0
         var isShifting: Boolean = false
@@ -265,44 +271,82 @@ class HeroCarouselRowPresenter(
     /**
      * Called by Leanback when this row is bound or its data changes.
      *
-     * item is a single asset — CustomAsset (skeleton), Asset, CustomKalturaAsset,
-     * EnveuAsset, Title, or RailCommonData — exactly like HeroCarouselCardPresenter.
-     *
-     * Bulk list extraction is intentionally removed. Assets are fed one-by-one
-     * via bindAsset(holder, position, item), called from ListFragment.updateRow.
+     * Leanback passes the entire ListRow here — NOT a single asset.
+     * We iterate the row's ObjectAdapter to populate every slot, then register
+     * a DataObserver so adapter.replace(i, realAsset) called by
+     * ListFragment.updateRow live-refreshes individual slots without a full re-bind.
      */
     override fun onBindRowViewHolder(vh: RowPresenter.ViewHolder, item: Any) {
         super.onBindRowViewHolder(vh, item)
         val holder = vh as ViewHolder
 
-        // 1. Capture rail metadata when the row itself carries it
-        if (item is RailCommonData) {
-            railCommonData = item
-            holder.activeRailData = item
-            return  // metadata-only bind — slot content comes via bindAsset()
+        // 1. Detach any previously observed adapter
+        holder.boundAdapter?.let { old ->
+            holder.dataObserver?.let { obs -> old.unregisterObserver(obs) }
         }
+        holder.boundAdapter = null
+        holder.dataObserver = null
 
-        // 2. Reset state (clean slate for fresh data)
+        // 2. Reset carousel state (clean slate)
         stopTrailer(holder)
         stopAutoRotate(holder)
         holder.activeShiftAnimSet?.cancel()
         holder.isShifting = false
         holder.pendingDelta = 0
         holder.selectedIndex = 0
+        holder.items.clear()
         holder.cardViews.forEach { it.boundTitleId = null }
 
-        // 3. Register this single asset at position 0 — same pattern as
-        //    HeroCarouselCardPresenter.onBindViewHolder dispatching on item type
-        when (item) {
-            is CustomAsset,
-            is CustomKalturaAsset,
-            is com.example.ott.EnveuCategoryServices.Asset,
-            is Asset,
-            is Title -> bindAsset(holder, 0, item)
-            else -> { /* unrecognised type — ignore */ }
+        // 3. Get the adapter from the ListRow Leanback passes us
+        val adapter: ObjectAdapter? = when (item) {
+            is ListRow -> item.adapter
+            else -> null
         }
 
-        // 4. Initialise / refresh slots around the new item
+        if (adapter == null) {
+            // Fallback: single direct asset (e.g. RailCommonData metadata)
+            if (item is RailCommonData) {
+                railCommonData = item
+                holder.activeRailData = item
+            }
+        } else {
+            // 4. Populate all slots from the adapter immediately
+            for (i in 0 until adapter.size()) {
+                adapter.get(i)?.let { asset -> bindAsset(holder, i, asset) }
+            }
+
+            // 5. Register a DataObserver so adapter.replace(i, realAsset) from
+            //    ListFragment.updateRow live-refreshes just that slot.
+            val observer = object : ObjectAdapter.DataObserver() {
+                override fun onItemRangeChanged(positionStart: Int, itemCount: Int) {
+                    for (i in positionStart until positionStart + itemCount) {
+                        adapter.get(i)?.let { asset -> bindAsset(holder, i, asset) }
+                    }
+                    // Re-render dots if count changed
+                    renderDots(holder, holder.items.size, holder.selectedIndex)
+                }
+
+                override fun onItemRangeInserted(positionStart: Int, itemCount: Int) {
+                    for (i in positionStart until positionStart + itemCount) {
+                        adapter.get(i)?.let { asset -> bindAsset(holder, i, asset) }
+                    }
+                    renderDots(holder, holder.items.size, holder.selectedIndex)
+                }
+
+                override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) {
+                    // Trim items list and rebind visible slots
+                    val excess = holder.items.size - adapter.size()
+                    if (excess > 0) repeat(excess) { holder.items.removeLastOrNull() }
+                    rebindVisibleSlots(holder)
+                    renderDots(holder, holder.items.size, holder.selectedIndex)
+                }
+            }
+            adapter.registerObserver(observer)
+            holder.boundAdapter = adapter
+            holder.dataObserver = observer
+        }
+
+        // 6. Initialise / refresh slot positions
         if (holder.stack.isLaidOut && holder.stack.width > 0) {
             setupSlots(holder)
             bindInitialState(holder)
@@ -313,12 +357,27 @@ class HeroCarouselRowPresenter(
             }
         }
 
-        // 5. Begin auto-rotation
+        // 7. Begin auto-rotation
         startAutoRotate(holder)
+    }
+
+    /** Re-draws slot 0, 1, 2 from holder.items after a structural change. */
+    private fun rebindVisibleSlots(holder: ViewHolder) {
+        listOf(0, 1, 2).forEach { slotOffset ->
+            val idx = holder.selectedIndex + slotOffset
+            val asset = holder.items.getOrNull(idx) ?: return@forEach
+            bindAsset(holder, idx, asset)
+        }
     }
 
     override fun onUnbindRowViewHolder(vh: RowPresenter.ViewHolder) {
         val holder = vh as ViewHolder
+        // Unregister DataObserver to prevent leaks
+        holder.boundAdapter?.let { adapter ->
+            holder.dataObserver?.let { obs -> adapter.unregisterObserver(obs) }
+        }
+        holder.boundAdapter = null
+        holder.dataObserver = null
         stopTrailer(holder)
         stopAutoRotate(holder)
         holder.activeShiftAnimSet?.cancel()
