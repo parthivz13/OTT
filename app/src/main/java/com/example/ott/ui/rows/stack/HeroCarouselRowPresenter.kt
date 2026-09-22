@@ -21,8 +21,6 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.cardview.widget.CardView
 import androidx.core.view.doOnLayout
-import androidx.leanback.widget.ListRow
-import androidx.leanback.widget.ObjectAdapter
 import androidx.leanback.widget.RowPresenter
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -144,9 +142,8 @@ class HeroCarouselRowPresenter(
         val cardViews = mutableListOf<CardSlotView>()
         var slotsInitialized: Boolean = false
 
-        // Pure dynamic asset list (completely replacing ObjectAdapter)
+        // Asset list: populated per-position via bindAsset(holder, position, item)
         val items = mutableListOf<Any>()
-        val assets: MutableList<Any> get() = items
 
         var activeRailData: RailCommonData? = null
         var selectedIndex: Int = 0
@@ -266,77 +263,46 @@ class HeroCarouselRowPresenter(
     }
 
     /**
-     * Extracts individual items cleanly from any container passed by Leanback or the Fragment.
-     */
-    private fun extractItems(item: Any?): List<Any> {
-        if (item == null) return emptyList()
-        return when (item) {
-            is ListRow -> {
-                val adapter = item.adapter
-                val list = mutableListOf<Any>()
-                if (adapter != null) {
-                    for (i in 0 until adapter.size()) {
-                        adapter.get(i)?.let { list.add(it) }
-                    }
-                }
-                list
-            }
-            is RailCommonData -> {
-                item.assets.filterNotNull()
-            }
-            is ObjectAdapter -> {
-                val list = mutableListOf<Any>()
-                for (i in 0 until item.size()) {
-                    item.get(i)?.let { list.add(it) }
-                }
-                list
-            }
-            is List<*> -> item.filterNotNull()
-            is Array<*> -> item.filterNotNull()
-            else -> listOf(item)
-        }
-    }
-
-    /**
-     * Called whenever Leanback binds or replaces a row (e.g. from updateRow in your ListFragment).
+     * Called by Leanback when this row is bound or its data changes.
+     *
+     * item is a single asset — CustomAsset (skeleton), Asset, CustomKalturaAsset,
+     * EnveuAsset, Title, or RailCommonData — exactly like HeroCarouselCardPresenter.
+     *
+     * Bulk list extraction is intentionally removed. Assets are fed one-by-one
+     * via bindAsset(holder, position, item), called from ListFragment.updateRow.
      */
     override fun onBindRowViewHolder(vh: RowPresenter.ViewHolder, item: Any) {
         super.onBindRowViewHolder(vh, item)
         val holder = vh as ViewHolder
 
-        Log.e(TAG, "onBindRowViewHolder triggered | item: $item")
-
-        // 1. Intercept RailCommonData metadata if provided
+        // 1. Capture rail metadata when the row itself carries it
         if (item is RailCommonData) {
             railCommonData = item
             holder.activeRailData = item
+            return  // metadata-only bind — slot content comes via bindAsset()
         }
 
-        // 2. Stop running operations (clean slate for replacing dummy data)
+        // 2. Reset state (clean slate for fresh data)
         stopTrailer(holder)
         stopAutoRotate(holder)
         holder.activeShiftAnimSet?.cancel()
         holder.isShifting = false
         holder.pendingDelta = 0
         holder.selectedIndex = 0
-
-        // Reset boundTitleId so incoming real data forces fresh image binding
         holder.cardViews.forEach { it.boundTitleId = null }
 
-        // 3. Extract and update items
-        val newItems = extractItems(item)
-        holder.items.clear()
-        holder.items.addAll(newItems)
-
-        Log.e(TAG, "Total Assets Extracted: ${holder.items.size}")
-
-        // 4. Bind each asset individually with log output
-        holder.items.forEachIndexed { index, asset ->
-            Log.e(TAG, "Rebound Asset [$index] of ${holder.items.size} | $asset")
-            bindAsset(holder, index, asset)
+        // 3. Register this single asset at position 0 — same pattern as
+        //    HeroCarouselCardPresenter.onBindViewHolder dispatching on item type
+        when (item) {
+            is CustomAsset,
+            is CustomKalturaAsset,
+            is com.example.ott.EnveuCategoryServices.Asset,
+            is Asset,
+            is Title -> bindAsset(holder, 0, item)
+            else -> { /* unrecognised type — ignore */ }
         }
 
-        // 5. Layout and initialize slots
+        // 4. Initialise / refresh slots around the new item
         if (holder.stack.isLaidOut && holder.stack.width > 0) {
             setupSlots(holder)
             bindInitialState(holder)
@@ -347,7 +313,7 @@ class HeroCarouselRowPresenter(
             }
         }
 
-        // 6. Begin auto-rotation on the fresh data
+        // 5. Begin auto-rotation
         startAutoRotate(holder)
     }
 
