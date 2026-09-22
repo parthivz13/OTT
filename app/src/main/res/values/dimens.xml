@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Hero Carousel Dimensions matching reference TV specifications -->
-    <dimen name="carousel_selected_width">460dp</dimen>
-    <dimen name="carousel_selected_height">258dp</dimen>
-    <dimen name="carousel_unselected_width">144dp</dimen>
-    <dimen name="carousel_unselected_height">216dp</dimen>
-    <dimen name="hero_carousel_unfocused_top_margin">21dp</dimen>
+    <!-- Hero Carousel Dimensions matching JioHotstar carousel specifications -->
+    <dimen name="carousel_selected_width">640dp</dimen>
+    <dimen name="carousel_selected_height">360dp</dimen>
+    <dimen name="carousel_unselected_width">200dp</dimen>
+    <dimen name="carousel_unselected_height">300dp</dimen>
+    <dimen name="hero_carousel_unfocused_top_margin">30dp</dimen>
     <dimen name="hero_carousel_card_corner_radius">12dp</dimen>
     <dimen name="row_alignment_offset">24dp</dimen>
     <dimen name="row_alignment_offset1">48dp</dimen>
