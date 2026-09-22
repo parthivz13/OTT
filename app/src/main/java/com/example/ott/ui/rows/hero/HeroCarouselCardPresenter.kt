@@ -27,41 +27,41 @@ import com.bumptech.glide.load.resource.bitmap.CenterCrop
 import com.bumptech.glide.load.resource.bitmap.RoundedCorners
 import com.bumptech.glide.request.RequestOptions
 import com.example.ott.R
-import com.example.ott.data.model.HeroCarouselConfig
 import com.example.ott.data.model.Title
+import com.example.ott.sott.base.CarouselFocusListener
+import com.example.ott.sott.models.CustomAsset
+import com.example.ott.sott.models.CustomKalturaAsset
+import com.example.ott.sott.networking.RailCommonData
+import com.example.ott.sott.utils.AppCommonMethod
+import com.example.ott.sott.utils.LogUtils
+import com.example.ott.sott.utils.SharedPrefHelper
+import com.example.ott.sott.utils.constants.AppConstants
+import com.example.ott.types.Asset
 
-/**
- * Android TV OTT Hero Carousel Card Presenter.
- *
- * Implements:
- * - Fluid, hardware-accelerated D-pad Left/Right expand and collapse animation (260ms DecelerateInterpolator).
- * - Smooth parallel interpolation of width, height, topMargin, elevation, and crossfade between
- *   2:3 portrait poster and 16:9 landscape backdrop.
- * - Staggered slide-fade for title, metadata badges, description, and action buttons.
- * - Hardware-accelerated trailer autoplay via Media3 ExoPlayer with 600ms debounce on focus hold.
- * - Auto-slide synchronization with D-pad navigation and clean focus tracking.
- */
 class HeroCarouselCardPresenter(
-    private val config: HeroCarouselConfig = HeroCarouselConfig(),
+    var railCommonData: RailCommonData = RailCommonData(),
     private val carouselFocusListener: CarouselFocusListener? = null,
-    private val onItemClicked: ((Title) -> Unit)? = null
+    private val onItemClicked: ((Any) -> Unit)? = null,
+    /**
+     * When true the presenter behaves as a hero carousel:
+     * the last focused card stays expanded even after focus leaves the row.
+     * When false (default) the card collapses as soon as it loses focus.
+     */
+    val keepExpandedWhenUnfocused: Boolean = false
 ) : Presenter() {
 
     private val rowId: String
-        get() = config.rowId
+        get() = railCommonData.screenWidget?.Id ?: "hero_carousel_default"
 
     companion object {
-        private const val TAG = "HeroCarouselCard"
         private const val FOCUS_HOLD_BEFORE_AUTOPLAY_MS = 600L
-        private const val EXPAND_COLLAPSE_DURATION_MS = 260L
+        private const val EXPAND_COLLAPSE_DURATION_MS = 250L
 
         private var sharedPlayer: ExoPlayer? = null
         private var activeHolder: CardViewHolder? = null
-
         private val autoplayHandler = Handler(Looper.getMainLooper())
         private var pendingAutoplayRunnable: Runnable? = null
 
-        @Synchronized
         private fun getOrCreatePlayer(context: Context): ExoPlayer {
             if (sharedPlayer == null) {
                 sharedPlayer = ExoPlayer.Builder(context.applicationContext)
@@ -88,6 +88,44 @@ class HeroCarouselCardPresenter(
             activeHolder = null
         }
 
+        /**
+         * The card that was last focused and is kept expanded when
+         * keepExpandedWhenUnfocused = true and focus leaves the row.
+         */
+        var lastExpandedHolder: CardViewHolder? = null
+            private set
+
+        /**
+         * Collapse and clear the pinned expanded card.
+         * Call this when the row loses focus or is unbound.
+         */
+        fun collapseLastExpanded() {
+            lastExpandedHolder?.let { holder ->
+                holder.anim?.cancel()
+                // Animate collapse back to poster/small size
+                val context = holder.rootView.context
+                val unselectedW = context.resources.getDimensionPixelSize(R.dimen.carousel_unselected_width)
+                val unselectedH = context.resources.getDimensionPixelSize(R.dimen.carousel_unselected_height)
+                val unselectedTopMargin = context.resources.getDimensionPixelSize(R.dimen.hero_carousel_unfocused_top_margin)
+                holder.basicDetailsLayout.visibility = View.GONE
+                holder.bgShadow.visibility = View.GONE
+                holder.backdrop.alpha = 0f
+                holder.poster.alpha = 1f
+                holder.focusBorder.alpha = 0f
+                val lp = holder.cardContainer.layoutParams
+                lp.width = unselectedW
+                lp.height = unselectedH
+                if (lp is ViewGroup.MarginLayoutParams) lp.topMargin = unselectedTopMargin
+                holder.cardContainer.layoutParams = lp
+            }
+            lastExpandedHolder = null
+        }
+
+        /** Called by the card itself to register or clear the pin. */
+        internal fun pinExpanded(holder: CardViewHolder?) {
+            lastExpandedHolder = holder
+        }
+
         fun releasePlayer() {
             stopActiveVideo()
             sharedPlayer?.release()
@@ -99,7 +137,7 @@ class HeroCarouselCardPresenter(
     // VIEW HOLDER
     // ---------------------------------------------------------
 
-    class CardViewHolder(val rootView: View) : Presenter.ViewHolder(rootView) {
+    class CardViewHolder(val rootView: View) : ViewHolder(rootView) {
         val cardContainer: CardView = rootView.findViewById(R.id.card_hero_container)
         val poster: ImageView = rootView.findViewById(R.id.iv_hero_carousel_poster)
         val backdrop: ImageView = rootView.findViewById(R.id.iv_hero_carousel_backdrop)
@@ -123,7 +161,7 @@ class HeroCarouselCardPresenter(
         val btnWatchNow: Button = rootView.findViewById(R.id.btn_hero_carousel_watch)
 
         var trailerUrl: String? = null
-        var boundTitle: Title? = null
+        var boundItem: Any? = null
         var anim: ValueAnimator? = null
 
         fun revertToPoster() {
@@ -216,14 +254,17 @@ class HeroCarouselCardPresenter(
 
         holder.anim?.cancel()
         holder.revertToPoster()
-        holder.boundTitle = null
+        holder.boundItem = item
         holder.trailerUrl = null
         clearBasicDetails(holder)
 
-        if (item is Title) {
-            bindTitle(holder, context, item)
-        } else {
-            clearHolder(holder)
+        when (item) {
+            is CustomAsset -> bindCustomAsset(holder, item)
+            is CustomKalturaAsset -> bindCustomKalturaAsset(holder, context, item)
+            is com.example.ott.EnveuCategoryServices.Asset -> bindEnveuAsset(holder, item)
+            is Asset -> bindKalturaAsset(holder, context, item)
+            is Title -> bindTitle(holder, context, item)
+            else -> clearHolder(holder)
         }
 
         // Apply initial layout statically without animation
@@ -231,59 +272,96 @@ class HeroCarouselCardPresenter(
         setupFocusListener(holder)
     }
 
-    private fun bindTitle(holder: CardViewHolder, context: Context, title: Title) {
-        holder.boundTitle = title
-        holder.title.text = title.name
+    private fun bindCustomAsset(holder: CardViewHolder, item: CustomAsset) {
+        holder.title.text = ""
+        holder.description.visibility = View.GONE
+        holder.trendingBadge.visibility = View.GONE
+        holder.basicDetailsLayout.visibility = View.GONE
+        holder.trailerUrl = null
 
-        // Trending badge
-        if (!title.badge.isNullOrBlank()) {
-            holder.trendingBadge.text = title.badge
-            holder.trendingBadge.visibility = View.VISIBLE
+        holder.poster.setImageResource(R.drawable.simmer_background)
+        holder.backdrop.setImageResource(R.drawable.simmer_background)
+    }
+
+    private fun bindEnveuAsset(holder: CardViewHolder, item: com.example.ott.EnveuCategoryServices.Asset) {
+        holder.title.text = item.name.orEmpty()
+        holder.description.visibility = View.GONE
+        holder.trendingBadge.visibility = View.GONE
+        holder.basicDetailsLayout.visibility = View.VISIBLE
+        holder.trailerUrl = null
+
+        val imageUrl = item.images?.firstOrNull()?.url
+        Glide.with(holder.poster).load(imageUrl).apply(requestOptions).into(holder.poster)
+        Glide.with(holder.backdrop).load(imageUrl).apply(requestOptions).into(holder.backdrop)
+    }
+
+    private fun bindCustomKalturaAsset(holder: CardViewHolder, context: Context, item: CustomKalturaAsset) {
+        holder.title.text = item.name.orEmpty()
+        holder.description.visibility = View.GONE
+        holder.trendingBadge.visibility = View.GONE
+        holder.basicDetailsLayout.visibility = View.VISIBLE
+        holder.trailerUrl = null
+
+        val imageUrl = item.images?.firstOrNull()?.url
+        Glide.with(holder.poster).load(imageUrl).apply(requestOptions).into(holder.poster)
+        Glide.with(holder.backdrop).load(imageUrl).apply(requestOptions).into(holder.backdrop)
+    }
+
+    private fun bindKalturaAsset(holder: CardViewHolder, context: Context, asset: Asset) {
+        holder.title.text = asset.name.orEmpty()
+        holder.trendingBadge.visibility = View.GONE
+
+        val seasonEpisode = AppCommonMethod.addSeasonAndEpisodeNo(asset)
+        val descriptionText = if (!seasonEpisode.isNullOrEmpty()) {
+            seasonEpisode
         } else {
-            holder.trendingBadge.visibility = View.GONE
+            AppCommonMethod.getMetaByTag(asset, "LongSummary")
         }
 
-        // Description / Summary
-        val descriptionText = if (!title.seasonEpisode.isNullOrEmpty()) {
-            "${title.seasonEpisode} • ${title.overview}"
-        } else {
-            title.overview
-        }
-        if (descriptionText.isNotEmpty()) {
+        if (!descriptionText.isNullOrEmpty()) {
             holder.description.text = descriptionText
             holder.description.visibility = View.VISIBLE
         } else {
             holder.description.visibility = View.GONE
         }
 
-        // Trailer URL
-        holder.trailerUrl = title.trailerUrl ?: title.videoUrl
+        // Trailer
+        val initialTrailer = asset.mediaFiles?.firstOrNull {
+            it.type?.equals("Preview", ignoreCase = true) == true
+        }?.url
+        val externalId = asset.externalId.orEmpty()
+        val trailerFromPref = if (externalId.isNotEmpty()) {
+            SharedPrefHelper.getInstance().getTrailerFromMap(context, externalId)?.toString()
+        } else null
+        holder.trailerUrl = trailerFromPref ?: initialTrailer
 
-        // Basic Details
-        bindBasicDetails(holder, title)
+        bindBasicDetails(holder, asset)
 
-        // Pre-load dual images: 2:3 portrait poster & 16:9 backdrop for instant zero-lag crossfade
-        loadCardImages(holder, title)
+        val unselectedW = context.resources.getDimensionPixelSize(R.dimen.carousel_unselected_width)
+        val unselectedH = context.resources.getDimensionPixelSize(R.dimen.carousel_unselected_height)
+        val selectedW = context.resources.getDimensionPixelSize(R.dimen.carousel_selected_width)
+        val selectedH = context.resources.getDimensionPixelSize(R.dimen.carousel_selected_height)
 
-        // Click listeners
-        holder.rootView.setOnClickListener {
-            onItemClicked?.invoke(title)
-        }
-        holder.btnWatchNow.setOnClickListener {
-            onItemClicked?.invoke(title)
-        }
+        val posterUrl = asset.images?.takeIf { it.isNotEmpty() }?.let {
+            AppCommonMethod.getCardwiseImage(it, AppConstants.RATIO_2X3, unselectedW, unselectedH)
+        } ?: asset.images?.firstOrNull()?.url
+
+        val backdropUrl = asset.images?.takeIf { it.isNotEmpty() }?.let {
+            AppCommonMethod.getCardwiseImage(it, AppConstants.RATIO_16X9_cover, selectedW, selectedH)
+        } ?: asset.images?.firstOrNull()?.url ?: posterUrl
+
+        Glide.with(holder.poster).load(posterUrl).apply(requestOptions).into(holder.poster)
+        Glide.with(holder.backdrop).load(backdropUrl).apply(requestOptions).into(holder.backdrop)
+
+        holder.rootView.setOnClickListener { onItemClicked?.invoke(asset) }
+        holder.btnWatchNow.setOnClickListener { onItemClicked?.invoke(asset) }
         holder.btnAddToWatchlist.setOnClickListener {
-            android.widget.Toast.makeText(context, "Added ${title.name} to Watchlist", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(context, "Added ${asset.name} to Watchlist", android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
-    private fun bindBasicDetails(holder: CardViewHolder, title: Title) {
-        // Metadata: Year • Genre
-        val metaParts = mutableListOf<String>()
-        if (title.year.isNotEmpty()) metaParts.add(title.year)
-        if (title.genre.isNotEmpty()) metaParts.add(title.genre)
-        val metadataText = metaParts.joinToString(" • ")
-
+    private fun bindBasicDetails(holder: CardViewHolder, asset: Asset) {
+        val metadataText = AppCommonMethod.getMetas(asset)
         if (metadataText.isNotEmpty()) {
             holder.metadata.text = metadataText
             holder.metadata.visibility = View.VISIBLE
@@ -291,11 +369,10 @@ class HeroCarouselCardPresenter(
             holder.metadata.visibility = View.GONE
         }
 
-        // Duration
-        val durationSec = title.durationSeconds
-        if (durationSec > 0) {
-            val hours = durationSec / 3600
-            val minutes = (durationSec % 3600) / 60
+        val duration = asset.mediaFiles?.firstOrNull()?.duration ?: 0
+        if (duration > 0) {
+            val hours = (duration / 3600).toInt()
+            val minutes = ((duration % 3600) / 60).toInt()
             val durationText = when {
                 hours > 0 && minutes > 0 -> "• ${hours}h ${minutes}m"
                 hours > 0 -> "• ${hours}h"
@@ -308,48 +385,69 @@ class HeroCarouselCardPresenter(
             } else {
                 holder.duration.visibility = View.GONE
             }
-        } else if (title.durationOrSeasons.isNotEmpty()) {
-            holder.duration.text = "• ${title.durationOrSeasons}"
-            holder.duration.visibility = View.VISIBLE
         } else {
             holder.duration.visibility = View.GONE
         }
 
-        // Badges: Quality
-        holder.fourKBadge.visibility = if (title.is4K) View.VISIBLE else View.GONE
-        holder.hdBadge.visibility = if (title.isHD && !title.is4K) View.VISIBLE else View.GONE
-        holder.adBadge.visibility = if (title.isAD) View.VISIBLE else View.GONE
+        val qualities = AppCommonMethod.getQualities(asset)
+        holder.adBadge.visibility = if ("AD" in qualities) View.VISIBLE else View.GONE
+        holder.hdBadge.visibility = if ("HD" in qualities) View.VISIBLE else View.GONE
+        holder.fourKBadge.visibility = if ("4K" in qualities) View.VISIBLE else View.GONE
 
-        // Parental rating
-        if (title.contentRating.isNotEmpty()) {
-            holder.parentalBadge.text = title.contentRating
+        val parentalRating = AppCommonMethod.getTagsFromAsset(asset, AppConstants.PARENTAL_RATING)
+        if (parentalRating.isNotEmpty()) {
+            holder.parentalBadge.text = parentalRating
             holder.parentalBadge.visibility = View.VISIBLE
         } else {
             holder.parentalBadge.visibility = View.GONE
         }
 
-        // Star rating
+        val ratingData = AppCommonMethod.getMetaByTag(asset, AppConstants.star_rating)
+        if (!ratingData.isNullOrEmpty() && ratingData != "0") {
+            ratingData.toDoubleOrNull()?.let {
+                holder.rating.text = "★ " + String.format("%.1f", it)
+                holder.rating.visibility = View.VISIBLE
+            } ?: run { holder.rating.visibility = View.GONE }
+        } else {
+            holder.rating.visibility = View.GONE
+        }
+    }
+
+    private fun bindTitle(holder: CardViewHolder, context: Context, title: Title) {
+        holder.title.text = title.name
+        holder.description.text = title.overview
+        holder.description.visibility = if (title.overview.isNotEmpty()) View.VISIBLE else View.GONE
+        holder.trendingBadge.visibility = if (!title.badge.isNullOrBlank()) {
+            holder.trendingBadge.text = title.badge
+            View.VISIBLE
+        } else View.GONE
+
+        holder.trailerUrl = title.trailerUrl ?: title.videoUrl
+
+        // Metadata
+        val metaParts = listOfNotNull(title.year.takeIf { it.isNotEmpty() }, title.genre.takeIf { it.isNotEmpty() })
+        holder.metadata.text = metaParts.joinToString(" • ")
+        holder.metadata.visibility = if (metaParts.isNotEmpty()) View.VISIBLE else View.GONE
+
+        // Rating
         if (title.rating > 0.0) {
             holder.rating.text = "★ " + String.format("%.1f", title.rating)
             holder.rating.visibility = View.VISIBLE
         } else {
             holder.rating.visibility = View.GONE
         }
-    }
 
-    private fun loadCardImages(holder: CardViewHolder, title: Title) {
         val posterUrl = title.posterUrl ?: title.backdropUrl
         val backdropUrl = title.backdropUrl ?: title.posterUrl
 
-        Glide.with(holder.poster)
-            .load(posterUrl)
-            .apply(requestOptions)
-            .into(holder.poster)
+        Glide.with(holder.poster).load(posterUrl).apply(requestOptions).into(holder.poster)
+        Glide.with(holder.backdrop).load(backdropUrl).apply(requestOptions).into(holder.backdrop)
 
-        Glide.with(holder.backdrop)
-            .load(backdropUrl)
-            .apply(requestOptions)
-            .into(holder.backdrop)
+        holder.rootView.setOnClickListener { onItemClicked?.invoke(title) }
+        holder.btnWatchNow.setOnClickListener { onItemClicked?.invoke(title) }
+        holder.btnAddToWatchlist.setOnClickListener {
+            android.widget.Toast.makeText(context, "Added ${title.name} to Watchlist", android.widget.Toast.LENGTH_SHORT).show()
+        }
     }
 
     // ---------------------------------------------------------
@@ -377,7 +475,6 @@ class HeroCarouselCardPresenter(
         holder.anim?.cancel()
 
         if (!animate) {
-            // Instant layout apply (used during initial binding)
             applyDimensionToContainer(holder, targetW, targetH, targetMargin)
             holder.backdrop.alpha = targetAlpha
             holder.poster.alpha = 1f - targetAlpha
@@ -391,7 +488,6 @@ class HeroCarouselCardPresenter(
             return
         }
 
-        // Animated fluid transition during D-pad navigation
         if (hasFocus) {
             holder.rootView.bringToFront()
             holder.basicDetailsLayout.visibility = View.VISIBLE
@@ -505,6 +601,11 @@ class HeroCarouselCardPresenter(
                     HeroCarouselAutoSlideController.notifyUserInteraction(rowId)
                 }
 
+                // If another card was pinned expanded in this row, collapse it first
+                if (lastExpandedHolder !== null && lastExpandedHolder !== holder) {
+                    collapseLastExpanded()
+                }
+
                 // Smooth fluid expansion animation
                 animateCardExpansion(holder, hasFocus = true, animate = true)
 
@@ -520,9 +621,6 @@ class HeroCarouselCardPresenter(
                     scheduleAutoplay(holder)
                 }
             } else {
-                // Smooth fluid collapse animation
-                animateCardExpansion(holder, hasFocus = false, animate = true)
-
                 cancelPendingAutoplay()
 
                 if (activeHolder === holder) {
@@ -535,15 +633,79 @@ class HeroCarouselCardPresenter(
                     activeHolder = null
                 }
 
+                // After focus settles, decide whether to collapse or keep expanded
                 holder.rootView.post {
                     val focusedView = holder.rootView.rootView.findFocus()
                     val isStillInside = focusedView?.let { isViewInsideCarousel(it) } ?: false
+
+                    if (keepExpandedWhenUnfocused && !isStillInside) {
+                        // Focus left the entire row — pin this card as the visible expanded state
+                        pinExpanded(holder)
+                        // Don't collapse the card visually
+                    } else {
+                        // Either within row (another card getting focus) or collapse mode
+                        if (lastExpandedHolder === holder) pinExpanded(null)
+                        animateCardExpansion(holder, hasFocus = false, animate = true)
+                    }
+
                     if (!isStillInside) {
                         notifyCarouselFocus(false)
                     }
                 }
             }
         }
+    }
+
+    // ---------------------------------------------------------
+    // AUTO-SLIDE CONTROLLER REGISTRATION
+    // ---------------------------------------------------------
+
+    private fun registerAutoSlide(holder: CardViewHolder, attempt: Int = 0) {
+        val maxAttempts = 10
+        val retryDelayMs = 150L
+
+        holder.rootView.post {
+            val listRowView = findListRowView(holder.rootView)
+            if (listRowView == null) {
+                if (attempt < maxAttempts) {
+                    holder.rootView.postDelayed({ registerAutoSlide(holder, attempt + 1) }, retryDelayMs)
+                }
+                return@post
+            }
+
+            val gridView: HorizontalGridView = listRowView.gridView
+            val itemCount = gridView.adapter?.itemCount ?: 0
+            if (itemCount <= 1) {
+                HeroCarouselAutoSlideController.unregisterRow(rowId)
+                return@post
+            }
+
+            val autoRotateEnabled = railCommonData.screenWidget?.autoRotate == true
+            if (!autoRotateEnabled) {
+                HeroCarouselAutoSlideController.unregisterRow(rowId)
+                return@post
+            }
+
+            val duration = railCommonData.screenWidget?.autoRotateDuration?.takeIf { it > 0 } ?: 5
+            val intervalMs = duration * 1000L
+
+            HeroCarouselAutoSlideController.registerRow(
+                rowId = rowId,
+                gridView = gridView,
+                itemCount = itemCount,
+                autoRotateEnabled = true,
+                intervalMs = intervalMs
+            )
+        }
+    }
+
+    private fun findListRowView(view: View): ListRowView? {
+        var current: View? = view
+        while (current != null) {
+            if (current is ListRowView) return current
+            current = current.parent as? View
+        }
+        return null
     }
 
     // ---------------------------------------------------------
@@ -568,64 +730,8 @@ class HeroCarouselCardPresenter(
         pendingAutoplayRunnable = null
     }
 
-    // ---------------------------------------------------------
-    // AUTO-SLIDE REGISTRATION
-    // ---------------------------------------------------------
-
-    private fun findListRowView(view: View): ListRowView? {
-        var current: View? = view
-        while (current != null) {
-            if (current is ListRowView) return current
-            current = current.parent as? View
-        }
-        return null
-    }
-
-    private fun registerAutoSlide(holder: CardViewHolder, attempt: Int = 0) {
-        val maxAttempts = 10
-        val retryDelayMs = 150L
-
-        holder.rootView.post {
-            val listRowView = findListRowView(holder.rootView)
-            if (listRowView == null) {
-                if (attempt < maxAttempts) {
-                    holder.rootView.postDelayed(
-                        { registerAutoSlide(holder, attempt + 1) },
-                        retryDelayMs
-                    )
-                }
-                return@post
-            }
-
-            val gridView: HorizontalGridView = listRowView.gridView
-            val itemCount = gridView.adapter?.itemCount ?: 0
-            if (itemCount <= 1 || !config.autoRotateEnabled) {
-                HeroCarouselAutoSlideController.unregisterRow(rowId)
-                return@post
-            }
-
-            val intervalMs = (config.autoRotateDurationSec.takeIf { it > 0 } ?: 6) * 1000L
-
-            HeroCarouselAutoSlideController.registerRow(
-                rowId = rowId,
-                gridView = gridView,
-                itemCount = itemCount,
-                autoRotateEnabled = true,
-                intervalMs = intervalMs
-            )
-        }
-    }
-
-    // ---------------------------------------------------------
-    // CLEAR
-    // ---------------------------------------------------------
-
     private fun clearBasicDetails(holder: CardViewHolder) {
         holder.basicDetailsLayout.visibility = View.GONE
-        holder.basicDetailsLayout.alpha = 0f
-        holder.bgShadow.visibility = View.GONE
-        holder.bgShadow.alpha = 0f
-        holder.focusBorder.alpha = 0f
         holder.metadata.text = ""
         holder.metadata.visibility = View.GONE
         holder.duration.text = ""
@@ -646,7 +752,7 @@ class HeroCarouselCardPresenter(
         holder.trendingBadge.visibility = View.GONE
         clearBasicDetails(holder)
         holder.trailerUrl = null
-        holder.boundTitle = null
+        holder.boundItem = null
 
         Glide.with(holder.poster).clear(holder.poster)
         Glide.with(holder.backdrop).clear(holder.backdrop)
@@ -657,11 +763,16 @@ class HeroCarouselCardPresenter(
 
     override fun onUnbindViewHolder(viewHolder: Presenter.ViewHolder) {
         val holder = viewHolder as? CardViewHolder ?: return
-        holder.anim?.cancel()
         if (activeHolder === holder) {
             stopActiveVideo()
         }
+        // If this was the pinned expanded card, clear the pin and collapse it
+        if (lastExpandedHolder === holder) {
+            collapseLastExpanded()
+        }
         cancelPendingAutoplay()
+        holder.anim?.cancel()
+        holder.anim = null
         try {
             Glide.with(holder.poster).clear(holder.poster)
             Glide.with(holder.backdrop).clear(holder.backdrop)

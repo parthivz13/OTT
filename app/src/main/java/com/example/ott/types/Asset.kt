@@ -1,24 +1,28 @@
 package com.example.ott.types
 
 data class Asset(
-    val id: String? = null,
-    val name: String? = null,
-    val externalId: String? = null,
-    val images: List<AssetImage>? = null,
-    val mediaFiles: List<MediaFile>? = null,
-    val tags: Map<String, Any>? = null,
-    val metas: Map<String, Any>? = null
+    var id: String? = null,
+    var name: String? = null,
+    var externalId: String? = null,
+    var images: List<AssetImage>? = null,
+    var mediaFiles: List<MediaFile>? = null,
+    var tags: MutableMap<String, Any?> = mutableMapOf(),
+    var metas: MutableMap<String, Any?> = mutableMapOf()
+)
+
+data class StringValue(
+    var value: String? = null
 )
 
 data class AssetImage(
-    val url: String? = null,
-    val ratio: String? = null,
-    val width: Int? = null,
-    val height: Int? = null
+    var url: String? = null,
+    var ratio: String? = null,
+    var width: Int? = null,
+    var height: Int? = null
 )
 
 data class MediaFile(
-    val type: String? = null,
-    val url: String? = null,
-    val duration: Long = 0L
+    var type: String? = null,
+    var url: String? = null,
+    var duration: Long = 0L
 )

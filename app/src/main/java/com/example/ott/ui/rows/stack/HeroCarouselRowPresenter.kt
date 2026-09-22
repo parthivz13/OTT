@@ -8,6 +8,7 @@ import android.animation.ValueAnimator
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.LayoutInflater
@@ -20,10 +21,8 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.cardview.widget.CardView
 import androidx.core.view.doOnLayout
-import androidx.leanback.widget.ArrayObjectAdapter
 import androidx.leanback.widget.ListRow
 import androidx.leanback.widget.ObjectAdapter
-import androidx.leanback.widget.Row
 import androidx.leanback.widget.RowPresenter
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -54,6 +53,7 @@ class HeroCarouselRowPresenter(
     override fun isUsingDefaultSelectEffect(): Boolean = false
 
     companion object {
+        private const val TAG = "DataChecker"
         private const val AUTO_ROTATE_INTERVAL_MS = 14000L
         private const val FOCUS_HOLD_BEFORE_AUTOPLAY_MS = 600L
         private const val TRAILER_CROSSFADE_MS = 250L
@@ -63,8 +63,6 @@ class HeroCarouselRowPresenter(
         private const val DOT_SPACING_DP = 6
 
         private const val SHIFT_DURATION_MS = 280L
-        private const val TEXT_FADE_OUT_MS = 100L
-        private const val TEXT_FADE_IN_MS = 160L
 
         private const val PEEK_1_SCALE = 0.88f
         private const val PEEK_2_SCALE = 0.76f
@@ -144,10 +142,16 @@ class HeroCarouselRowPresenter(
         val dotsContainer: LinearLayout = rootView.findViewById(R.id.hero_dots)
 
         val cardViews = mutableListOf<CardSlotView>()
-        var activeSlotIndex: Int = 0 // points to which cardView is currently at Slot 0
         var slotsInitialized: Boolean = false
 
-        var adapter: ObjectAdapter? = null
+        // Asset list: populated per-position via bindAsset(holder, position, item)
+        val items = mutableListOf<Any>()
+
+        // Tracks the currently observed adapter so we can unregister on unbind
+        var boundAdapter: ObjectAdapter? = null
+        var dataObserver: ObjectAdapter.DataObserver? = null
+
+        var activeRailData: RailCommonData? = null
         var selectedIndex: Int = 0
         var isShifting: Boolean = false
         var pendingDelta: Int = 0
@@ -156,6 +160,7 @@ class HeroCarouselRowPresenter(
 
         var activePlayingTextureView: TextureView? = null
         var isTrailerPlaying: Boolean = false
+        var activeShiftAnimSet: AnimatorSet? = null
 
         fun revertToPoster() {
             cardViews.forEach { slotView ->
@@ -184,7 +189,6 @@ class HeroCarouselRowPresenter(
             .inflate(R.layout.row_hero_carousel, parent, false)
         val viewHolder = ViewHolder(rootView)
 
-        // Pre-create card views synchronously so they are in the hierarchy before the first layout pass
         setupSlots(viewHolder)
         viewHolder.stack.doOnLayout {
             setupSlots(viewHolder)
@@ -196,8 +200,7 @@ class HeroCarouselRowPresenter(
             if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
             when (keyCode) {
                 KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                    val consumed = tryAdvance(viewHolder, 1)
-                    consumed
+                    tryAdvance(viewHolder, 1)
                 }
                 KeyEvent.KEYCODE_DPAD_LEFT -> {
                     if (viewHolder.selectedIndex == 0) {
@@ -222,18 +225,18 @@ class HeroCarouselRowPresenter(
                     )
                     true
                 }
-                else -> false // DPAD_DOWN escapes to rail below; DPAD_UP escapes above
+                else -> false
             }
         }
 
         // Focus Border & Auto-Rotation Sync
         viewHolder.card.setOnFocusChangeListener { _, hasFocus ->
-            /*viewHolder.focusBorder.animate().cancel()
+            viewHolder.focusBorder.animate().cancel()
             val targetAlpha = if (hasFocus) 1f else 0f
             viewHolder.focusBorder.animate()
                 .alpha(targetAlpha)
                 .setDuration(160L)
-                .start()*/
+                .start()
 
             carouselFocusListener?.onCarouselFocusChanged(hasFocus)
 
@@ -265,102 +268,154 @@ class HeroCarouselRowPresenter(
         return viewHolder
     }
 
+    /**
+     * Called by Leanback when this row is bound or its data changes.
+     *
+     * Leanback passes the entire ListRow here — NOT a single asset.
+     * We iterate the row's ObjectAdapter to populate every slot, then register
+     * a DataObserver so adapter.replace(i, realAsset) called by
+     * ListFragment.updateRow live-refreshes individual slots without a full re-bind.
+     */
     override fun onBindRowViewHolder(vh: RowPresenter.ViewHolder, item: Any) {
         super.onBindRowViewHolder(vh, item)
         val holder = vh as ViewHolder
 
-        if (item is RailCommonData) {
-            railCommonData = item
+        // 1. Detach any previously observed adapter
+        holder.boundAdapter?.let { old ->
+            holder.dataObserver?.let { obs -> old.unregisterObserver(obs) }
+        }
+        holder.boundAdapter = null
+        holder.dataObserver = null
+
+        // 2. Reset carousel state (clean slate)
+        stopTrailer(holder)
+        stopAutoRotate(holder)
+        holder.activeShiftAnimSet?.cancel()
+        holder.isShifting = false
+        holder.pendingDelta = 0
+        holder.selectedIndex = 0
+        holder.items.clear()
+        holder.cardViews.forEach { it.boundTitleId = null }
+
+        // 3. Get the adapter from the ListRow Leanback passes us
+        val adapter: ObjectAdapter? = when (item) {
+            is ListRow -> item.adapter
+            else -> null
         }
 
-        val adapter = resolveAdapter(item)
-        holder.adapter = adapter
-        holder.selectedIndex = 0
+        if (adapter == null) {
+            // Fallback: single direct asset (e.g. RailCommonData metadata)
+            if (item is RailCommonData) {
+                railCommonData = item
+                holder.activeRailData = item
+            }
+        } else {
+            // 4. Populate all slots from the adapter immediately
+            for (i in 0 until adapter.size()) {
+                adapter.get(i)?.let { asset -> bindAsset(holder, i, asset) }
+            }
+
+            // 5. Register a DataObserver so adapter.replace(i, realAsset) from
+            //    ListFragment.updateRow live-refreshes just that slot.
+            val observer = object : ObjectAdapter.DataObserver() {
+                override fun onItemRangeChanged(positionStart: Int, itemCount: Int) {
+                    for (i in positionStart until positionStart + itemCount) {
+                        adapter.get(i)?.let { asset -> bindAsset(holder, i, asset) }
+                    }
+                    // Re-render dots if count changed
+                    renderDots(holder, holder.items.size, holder.selectedIndex)
+                }
+
+                override fun onItemRangeInserted(positionStart: Int, itemCount: Int) {
+                    for (i in positionStart until positionStart + itemCount) {
+                        adapter.get(i)?.let { asset -> bindAsset(holder, i, asset) }
+                    }
+                    renderDots(holder, holder.items.size, holder.selectedIndex)
+                }
+
+                override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) {
+                    // Trim items list and rebind visible slots
+                    val excess = holder.items.size - adapter.size()
+                    if (excess > 0) repeat(excess) { holder.items.removeLastOrNull() }
+                    rebindVisibleSlots(holder)
+                    renderDots(holder, holder.items.size, holder.selectedIndex)
+                }
+            }
+            adapter.registerObserver(observer)
+            holder.boundAdapter = adapter
+            holder.dataObserver = observer
+        }
+
+        // 6. Initialise / refresh slot positions
         if (holder.stack.isLaidOut && holder.stack.width > 0) {
             setupSlots(holder)
+            bindInitialState(holder)
         } else {
             holder.stack.doOnLayout {
                 setupSlots(holder)
+                bindInitialState(holder)
             }
         }
+
+        // 7. Begin auto-rotation
         startAutoRotate(holder)
     }
 
-    private fun resolveAdapter(item: Any): ObjectAdapter {
-        return when (item) {
-            is ListRow -> item.adapter
-            is Row -> {
-                try {
-                    val method = item.javaClass.getMethod("getAdapter")
-                    (method.invoke(item) as? ObjectAdapter) ?: ArrayObjectAdapter()
-                } catch (_: Exception) {
-                    ArrayObjectAdapter()
-                }
-            }
-            is ObjectAdapter -> item
-            is RailCommonData -> extractAdapterFromRail(item)
-            is List<*> -> ArrayObjectAdapter().apply { addAll(0, item.filterNotNull()) }
-            is Array<*> -> ArrayObjectAdapter().apply { addAll(0, item.filterNotNull()) }
-            is CustomAsset, is CustomKalturaAsset, is com.example.ott.EnveuCategoryServices.Asset, is Asset, is Title -> {
-                ArrayObjectAdapter().apply { add(item) }
-            }
-            else -> {
-                extractAdapterViaReflection(item) ?: ArrayObjectAdapter().apply { add(item) }
-            }
+    /** Re-draws slot 0, 1, 2 from holder.items after a structural change. */
+    private fun rebindVisibleSlots(holder: ViewHolder) {
+        listOf(0, 1, 2).forEach { slotOffset ->
+            val idx = holder.selectedIndex + slotOffset
+            val asset = holder.items.getOrNull(idx) ?: return@forEach
+            bindAsset(holder, idx, asset)
         }
-    }
-
-    private fun extractAdapterFromRail(rail: RailCommonData): ObjectAdapter {
-        val adapter = ArrayObjectAdapter()
-        val list = rail.assets
-            ?: rail.customAssets
-            ?: rail.customKalturaAssets
-            ?: rail.enveuAssets
-            ?: rail.items
-        if (!list.isNullOrEmpty()) {
-            adapter.addAll(0, list)
-        }
-        return adapter
-    }
-
-    private fun extractAdapterViaReflection(item: Any): ObjectAdapter? {
-        val methods = listOf("getAssets", "getItems", "getAssetList", "getData", "getList")
-        for (name in methods) {
-            try {
-                val method = item.javaClass.getMethod(name)
-                val result = method.invoke(item)
-                if (result is List<*>) {
-                    return ArrayObjectAdapter().apply { addAll(0, result.filterNotNull()) }
-                }
-                if (result is ObjectAdapter) {
-                    return result
-                }
-            } catch (_: Exception) {
-            }
-        }
-        val fields = listOf("assets", "items", "assetList", "data", "list")
-        for (name in fields) {
-            try {
-                val field = item.javaClass.getDeclaredField(name).apply { isAccessible = true }
-                val result = field.get(item)
-                if (result is List<*>) {
-                    return ArrayObjectAdapter().apply { addAll(0, result.filterNotNull()) }
-                }
-                if (result is ObjectAdapter) {
-                    return result
-                }
-            } catch (_: Exception) {
-            }
-        }
-        return null
     }
 
     override fun onUnbindRowViewHolder(vh: RowPresenter.ViewHolder) {
-        super.onUnbindRowViewHolder(vh)
         val holder = vh as ViewHolder
+        // Unregister DataObserver to prevent leaks
+        holder.boundAdapter?.let { adapter ->
+            holder.dataObserver?.let { obs -> adapter.unregisterObserver(obs) }
+        }
+        holder.boundAdapter = null
+        holder.dataObserver = null
         stopTrailer(holder)
         stopAutoRotate(holder)
-        holder.adapter = null
+        holder.activeShiftAnimSet?.cancel()
+        holder.items.clear()
+        super.onUnbindRowViewHolder(vh)
+    }
+
+    fun bindAsset(holder: ViewHolder, position: Int, item: Any?) {
+        if (item == null) return
+        while (holder.items.size <= position) {
+            holder.items.add(item)
+        }
+        holder.items[position] = item
+
+        if (!holder.slotsInitialized) return
+        val activeIdx = holder.selectedIndex
+        when (position) {
+            activeIdx -> {
+                if (holder.cardViews.isNotEmpty()) {
+                    loadAsset(holder.cardViews[0], item, isFocused = true)
+                    bindTextViews(holder, item)
+                    scheduleTrailer(holder)
+                }
+            }
+            activeIdx + 1 -> {
+                if (holder.cardViews.size > 1) {
+                    loadAsset(holder.cardViews[1], item, isFocused = false)
+                    holder.cardViews[1].card.visibility = View.VISIBLE
+                }
+            }
+            activeIdx + 2 -> {
+                if (holder.cardViews.size > 2) {
+                    loadAsset(holder.cardViews[2], item, isFocused = false)
+                    holder.cardViews[2].card.visibility = View.VISIBLE
+                }
+            }
+        }
+        renderDots(holder, holder.items.size, activeIdx)
     }
 
     private fun setupSlots(holder: ViewHolder) {
@@ -377,11 +432,9 @@ class HeroCarouselRowPresenter(
             (390 * density).toInt()
         }
 
-        // Active Card dimensions matching JioHotstar 78.8% width ratio of carousel viewport
         val activeW = (totalW * 0.788f).toInt()
         val activeH = totalH
 
-        // Update hero_card overlay layoutParams to precisely cover Slot 0
         val cardParams = holder.card.layoutParams as FrameLayout.LayoutParams
         cardParams.width = activeW
         cardParams.height = activeH
@@ -390,11 +443,6 @@ class HeroCarouselRowPresenter(
 
         if (holder.cardViews.isEmpty()) {
             val context = holder.cardsContainer.context
-            // Create 4 card views:
-            // View 3 (buffer / incoming)
-            // View 2 (Slot 2 - Peek 2)
-            // View 1 (Slot 1 - Peek 1)
-            // View 0 (Slot 0 - Active)
             for (i in 0 until 4) {
                 val card = CardView(context).apply {
                     radius = 18f * density
@@ -404,7 +452,6 @@ class HeroCarouselRowPresenter(
                     pivotY = 0f
                 }
 
-                // 1. Poster image layer
                 val container = FrameLayout(context)
                 card.addView(
                     container,
@@ -412,7 +459,6 @@ class HeroCarouselRowPresenter(
                 )
                 val images = CrossfadeImagePair(container)
 
-                // 2. Hardware-accelerated trailer player layer (TextureView)
                 val textureView = TextureView(context).apply {
                     alpha = 0f
                     visibility = View.GONE
@@ -422,23 +468,19 @@ class HeroCarouselRowPresenter(
                     ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                 )
 
-                // 3. Left vignette scrim (maintains metadata readability over video)
                 val vignette = View(context).apply {
                     setBackgroundResource(R.drawable.card_left_vignette_scrim)
                 }
                 card.addView(vignette, FrameLayout.LayoutParams((activeW * 0.60f).toInt(), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START))
 
-                // 4. Bottom gradient scrim
                 val bottomScrim = View(context).apply {
                     setBackgroundResource(R.drawable.card_bottom_scrim)
                 }
                 card.addView(bottomScrim, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (activeH * 0.65f).toInt(), Gravity.BOTTOM))
 
-                // Initial layout params matching active card size
                 val lp = FrameLayout.LayoutParams(activeW, activeH)
                 card.layoutParams = lp
 
-                // Add to container: index 0 is at bottom of z-stack
                 holder.cardsContainer.addView(card, 0)
                 holder.cardViews.add(CardSlotView(card, images, textureView))
             }
@@ -454,7 +496,6 @@ class HeroCarouselRowPresenter(
         }
 
         holder.slotsInitialized = true
-        bindInitialState(holder)
     }
 
     private fun getSlots(holder: ViewHolder): List<Slot> {
@@ -471,12 +512,9 @@ class HeroCarouselRowPresenter(
             (390 * density).toInt()
         }
 
-        // Active Card: matching JioHotstar 78.8% width ratio of carousel viewport (2786px / 3536px)
         val activeW = (totalW * 0.788f).toInt()
         val activeH = totalH
 
-        // Visible peeking slice: both Peek 1 and Peek 2 have identical visible width (~76dp / 303px at 4K)
-        // Leaving 36dp (144px at 4K) right screen edge margin
         val rightMargin = (36f * density).toInt()
         val remainingW = (totalW - activeW - rightMargin).coerceAtLeast(0)
         val peekVisible = (remainingW / 2).coerceAtLeast((70f * density).toInt())
@@ -494,12 +532,6 @@ class HeroCarouselRowPresenter(
         val exitShift = (21f * density).toInt()
         val rightExitShift = (peekVisible * 0.6f).toInt()
 
-        // Slot indices:
-        // 0: Slot -1 (Left subtle exit/enter, scale 0.96f, alpha 0f)
-        // 1: Slot 0  (Active slot, scale 1.0f, alpha 1.0f)
-        // 2: Slot 1  (Peek 1, scale PEEK_1_SCALE, alpha PEEK_1_ALPHA)
-        // 3: Slot 2  (Peek 2, scale PEEK_2_SCALE, alpha PEEK_2_ALPHA)
-        // 4: Slot 3  (Right subtle exit/enter, scale 0.68f, alpha 0f)
         return listOf(
             Slot(-exitShift, 0, activeW, activeH, 0.96f, 0f, 4f * density),
             Slot(0, 0, activeW, activeH, 1.0f, 1.0f, 6f * density),
@@ -521,39 +553,35 @@ class HeroCarouselRowPresenter(
     }
 
     private fun bindInitialState(holder: ViewHolder) {
-        val adapter = holder.adapter ?: return
+        val totalCount = holder.items.size
+        if (totalCount == 0) return
         if (holder.cardViews.size < 4) return
         val slots = getSlots(holder)
 
-        val activeItem = itemAt(adapter, holder.selectedIndex) ?: return
+        val activeItem = itemAt(holder, holder.selectedIndex) ?: return
 
-        // 4 Views:
-        // cardViews[0] -> Slot 0 (Active)
-        // cardViews[1] -> Slot 1 (Peek 1)
-        // cardViews[2] -> Slot 2 (Peek 2)
-        // cardViews[3] -> Slot -1 / 3 (Buffer)
         val v0 = holder.cardViews[0]
         val v1 = holder.cardViews[1]
         val v2 = holder.cardViews[2]
         val vBuffer = holder.cardViews[3]
 
         applySlot(v0.card, slots[1])
-        loadAsset(v0, activeItem)
+        loadAsset(v0, activeItem, isFocused = true)
         v0.card.visibility = View.VISIBLE
 
-        val item1 = itemAt(adapter, holder.selectedIndex + 1)
+        val item1 = itemAt(holder, holder.selectedIndex + 1)
         if (item1 != null) {
             applySlot(v1.card, slots[2])
-            loadAsset(v1, item1)
+            loadAsset(v1, item1, isFocused = false)
             v1.card.visibility = View.VISIBLE
         } else {
             v1.card.visibility = View.INVISIBLE
         }
 
-        val item2 = itemAt(adapter, holder.selectedIndex + 2)
+        val item2 = itemAt(holder, holder.selectedIndex + 2)
         if (item2 != null) {
             applySlot(v2.card, slots[3])
-            loadAsset(v2, item2)
+            loadAsset(v2, item2, isFocused = false)
             v2.card.visibility = View.VISIBLE
         } else {
             v2.card.visibility = View.INVISIBLE
@@ -561,25 +589,20 @@ class HeroCarouselRowPresenter(
 
         vBuffer.card.visibility = View.INVISIBLE
 
-        // Ensure Z-order: vBuffer < v2 < v1 < v0
         vBuffer.card.bringToFront()
         v2.card.bringToFront()
         v1.card.bringToFront()
         v0.card.bringToFront()
-        holder.card.bringToFront() // Overlay remains on top
+        holder.card.bringToFront()
 
         bindTextViews(holder, activeItem)
-        /*holder.textBlock.alpha = 1f
-        holder.textBlock.translationY = 0f*/
-
-        renderDots(holder, adapter.size(), holder.selectedIndex)
-        preloadUpcoming(holder, adapter, holder.selectedIndex)
+        renderDots(holder, totalCount, holder.selectedIndex)
+        preloadUpcoming(holder, holder.selectedIndex)
         scheduleTrailer(holder)
     }
 
     private fun tryAdvance(holder: ViewHolder, delta: Int): Boolean {
-        val adapter = holder.adapter ?: return false
-        val count = adapter.size()
+        val count = holder.items.size
         if (count <= 0) return false
 
         if (holder.isShifting) {
@@ -592,8 +615,6 @@ class HeroCarouselRowPresenter(
 
         val next = holder.selectedIndex + delta
         if (next >= count && delta > 0) {
-            // At the end of the carousel, play tactile spring resistance like JioHotstar
-//            playEndBounce(holder)
             return true
         }
         if (next < 0) return false
@@ -606,26 +627,6 @@ class HeroCarouselRowPresenter(
         return true
     }
 
-    private fun playEndBounce(holder: ViewHolder) {
-        if (holder.cardViews.isEmpty()) return
-        val activeCard = holder.cardViews[0].card
-        activeCard.animate().cancel()
-        val density = holder.stack.context.resources.displayMetrics.density
-        val nudge = 12f * density
-        activeCard.animate()
-            .translationX(nudge)
-            .setDuration(120)
-            .setInterpolator(DecelerateInterpolator(1.8f))
-            .withEndAction {
-                activeCard.animate()
-                    .translationX(0f)
-                    .setDuration(160)
-                    .setInterpolator(DecelerateInterpolator(1.8f))
-                    .start()
-            }
-            .start()
-    }
-
     private fun drainPendingAdvance(holder: ViewHolder) {
         val delta = holder.pendingDelta
         if (delta == 0) return
@@ -634,15 +635,10 @@ class HeroCarouselRowPresenter(
     }
 
     private fun playJioHotstarShift(holder: ViewHolder, delta: Int, onEnd: () -> Unit) {
-        val adapter = holder.adapter ?: return
+        val count = holder.items.size
+        if (count <= 0) return
         holder.isShifting = true
         val slots = getSlots(holder)
-
-        // Dissolve text overlay and focus border during transition
-        /*holder.textBlock.animate().cancel()
-        holder.textBlock.alpha = 0f
-        holder.focusBorder.animate().cancel()
-        holder.focusBorder.alpha = 0f*/
 
         val v0 = holder.cardViews[0]
         val v1 = holder.cardViews[1]
@@ -653,7 +649,7 @@ class HeroCarouselRowPresenter(
         val animators = mutableListOf<Animator>()
 
         if (delta > 0) {
-            val incomingItem = itemAt(adapter, nextIndex + 2)
+            val incomingItem = itemAt(holder, nextIndex + 2)
             if (incomingItem != null) {
                 applySlot(vBuffer.card, slots[3])
                 vBuffer.card.alpha = PEEK_2_ALPHA
@@ -669,7 +665,7 @@ class HeroCarouselRowPresenter(
             v1.card.visibility = View.VISIBLE
             animators.add(animateBetweenSlots(v1.card, slots[2], slots[1]))
 
-            val itemAtPeek1 = itemAt(adapter, nextIndex + 1)
+            val itemAtPeek1 = itemAt(holder, nextIndex + 1)
             if (itemAtPeek1 != null) {
                 v2.card.visibility = View.VISIBLE
                 animators.add(animateBetweenSlots(v2.card, slots[3], slots[2]))
@@ -677,14 +673,13 @@ class HeroCarouselRowPresenter(
                 v2.card.visibility = View.INVISIBLE
             }
 
-            // Layer hierarchy: vBuffer (bottom) < v2 < v1 < v0 (dissolving top) < holder.card
             vBuffer.card.bringToFront()
             v2.card.bringToFront()
             v1.card.bringToFront()
             v0.card.bringToFront()
             holder.card.bringToFront()
 
-            AnimatorSet().apply {
+            val animSet = AnimatorSet().apply {
                 playTogether(animators)
                 duration = SHIFT_DURATION_MS
                 interpolator = DecelerateInterpolator(1.8f)
@@ -700,18 +695,14 @@ class HeroCarouselRowPresenter(
                         finishShiftSettle(holder, nextIndex, onEnd)
                     }
                 })
-                start()
             }
+            holder.activeShiftAnimSet = animSet
+            animSet.start()
         } else {
-            // Backward (DPAD_LEFT):
-            // vBuffer animates into Active from Slot -1
-            // v0 moves to Peek 1
-            // v1 moves to Peek 2
-            // If v2 was already at Peek 2, it stays stationary underneath v1 without dissolving
-            val incomingItem = itemAt(adapter, nextIndex)
+            val incomingItem = itemAt(holder, nextIndex)
             if (incomingItem != null) {
                 applySlot(vBuffer.card, slots[0])
-                loadAsset(vBuffer, incomingItem)
+                loadAsset(vBuffer, incomingItem, isFocused = true)
                 vBuffer.card.visibility = View.VISIBLE
                 animators.add(animateBetweenSlots(vBuffer.card, slots[0], slots[1]))
             }
@@ -719,7 +710,7 @@ class HeroCarouselRowPresenter(
             v0.card.visibility = View.VISIBLE
             animators.add(animateBetweenSlots(v0.card, slots[1], slots[2]))
 
-            val itemAtPeek2 = itemAt(adapter, nextIndex + 2)
+            val itemAtPeek2 = itemAt(holder, nextIndex + 2)
             if (itemAtPeek2 != null) {
                 v1.card.visibility = View.VISIBLE
                 animators.add(animateBetweenSlots(v1.card, slots[2], slots[3]))
@@ -736,7 +727,6 @@ class HeroCarouselRowPresenter(
                 }
             }
 
-            // Layer hierarchy: v2 (bottom) < v1 < v0 < vBuffer (incoming top) < holder.card
             v2.card.bringToFront()
             v1.card.bringToFront()
             v0.card.bringToFront()
@@ -745,7 +735,7 @@ class HeroCarouselRowPresenter(
             }
             holder.card.bringToFront()
 
-            AnimatorSet().apply {
+            val animSet = AnimatorSet().apply {
                 playTogether(animators)
                 duration = SHIFT_DURATION_MS
                 interpolator = DecelerateInterpolator(1.8f)
@@ -753,7 +743,6 @@ class HeroCarouselRowPresenter(
                     override fun onAnimationEnd(animation: Animator) {
                         v2.card.visibility = View.INVISIBLE
 
-                        // Promote views: vBuffer -> cardViews[0], v0 -> cardViews[1], v1 -> cardViews[2], v2 -> cardViews[3]
                         holder.cardViews[0] = vBuffer
                         holder.cardViews[1] = v0
                         holder.cardViews[2] = v1
@@ -762,69 +751,49 @@ class HeroCarouselRowPresenter(
                         finishShiftSettle(holder, nextIndex, onEnd)
                     }
                 })
-                start()
             }
+            holder.activeShiftAnimSet = animSet
+            animSet.start()
         }
     }
 
     private fun finishShiftSettle(holder: ViewHolder, activeIndex: Int, onEnd: () -> Unit) {
-        val adapter = holder.adapter
-        val density = holder.stack.context.resources.displayMetrics.density
-
+        val totalCount = holder.items.size
         val v0 = holder.cardViews[0]
         val v1 = holder.cardViews[1]
         val v2 = holder.cardViews[2]
         val vBuffer = holder.cardViews[3]
 
-        // Strict end-of-list visibility check
         vBuffer.card.visibility = View.INVISIBLE
-        if (adapter != null) {
-            val item1 = itemAt(adapter, activeIndex + 1)
-            if (item1 != null) {
-                loadAsset(v1, item1)
-                v1.card.visibility = View.VISIBLE
-            } else {
-                v1.card.visibility = View.INVISIBLE
-            }
-
-            val item2 = itemAt(adapter, activeIndex + 2)
-            if (item2 != null) {
-                loadAsset(v2, item2)
-                v2.card.visibility = View.VISIBLE
-            } else {
-                v2.card.visibility = View.INVISIBLE
-            }
+        val item1 = itemAt(holder, activeIndex + 1)
+        if (item1 != null) {
+            loadAsset(v1, item1, isFocused = false)
+            v1.card.visibility = View.VISIBLE
+        } else {
+            v1.card.visibility = View.INVISIBLE
         }
 
-        // Ensure proper layer hierarchy
+        val item2 = itemAt(holder, activeIndex + 2)
+        if (item2 != null) {
+            loadAsset(v2, item2, isFocused = false)
+            v2.card.visibility = View.VISIBLE
+        } else {
+            v2.card.visibility = View.INVISIBLE
+        }
+
         vBuffer.card.bringToFront()
         v2.card.bringToFront()
         v1.card.bringToFront()
         v0.card.bringToFront()
-        holder.card.bringToFront() // Overlay always top
+        holder.card.bringToFront()
 
-        // Restore focus border on active card if hero card is focused
-        /*if (holder.card.hasFocus()) {
-            holder.focusBorder.animate().alpha(1f).setDuration(160).start()
-        }*/
-
-        val activeItem = adapter?.let { itemAt(it, activeIndex) }
+        val activeItem = itemAt(holder, activeIndex)
         if (activeItem != null) {
             bindTextViews(holder, activeItem)
-            // Staggered slide and fade-in (160ms)
-            /*holder.textBlock.translationY = 8f * density
-            holder.textBlock.animate()
-                .alpha(1f)
-                .translationY(0f)
-                .setDuration(TEXT_FADE_IN_MS)
-                .setInterpolator(DecelerateInterpolator())
-                .start()*/
         }
 
-        if (adapter != null) {
-            renderDots(holder, adapter.size(), activeIndex)
-            preloadUpcoming(holder, adapter, activeIndex)
-        }
+        renderDots(holder, totalCount, activeIndex)
+        preloadUpcoming(holder, activeIndex)
 
         holder.isShifting = false
         scheduleTrailer(holder)
@@ -1086,12 +1055,12 @@ class HeroCarouselRowPresenter(
         }
     }
 
-    private fun preloadUpcoming(holder: ViewHolder, adapter: ObjectAdapter, index: Int) {
+    private fun preloadUpcoming(holder: ViewHolder, index: Int) {
         val context = holder.stack.context
         val preloadRange = (index - 1)..(index + 4)
         for (i in preloadRange) {
             if (i == index) continue
-            val item = itemAt(adapter, i) ?: continue
+            val item = itemAt(holder, i) ?: continue
             val url = resolveAsset(context, item, false)?.imageUrl ?: continue
             Glide.with(context)
                 .load(url)
@@ -1100,10 +1069,11 @@ class HeroCarouselRowPresenter(
         }
     }
 
-    private fun itemAt(adapter: ObjectAdapter, index: Int): Any? =
-        if (index in 0 until adapter.size()) adapter.get(index) else null
+    private fun itemAt(holder: ViewHolder, index: Int): Any? {
+        return if (index in 0 until holder.items.size) holder.items[index] else null
+    }
 
-    private fun currentItem(holder: ViewHolder): Any? = holder.adapter?.let { itemAt(it, holder.selectedIndex) }
+    private fun currentItem(holder: ViewHolder): Any? = itemAt(holder, holder.selectedIndex)
 
     private fun paletteColorFor(id: Any?): Int {
         val hash = id?.hashCode() ?: 0
@@ -1177,18 +1147,19 @@ class HeroCarouselRowPresenter(
 
     private fun startAutoRotate(holder: ViewHolder) {
         stopAutoRotate(holder)
-        val autoRotateEnabled = railCommonData?.screenWidget?.autoRotate ?: true
+        val activeData = holder.activeRailData ?: railCommonData
+        val autoRotateEnabled = activeData?.screenWidget?.autoRotate ?: true
         if (!autoRotateEnabled) return
 
-        val duration = railCommonData?.screenWidget?.autoRotateDuration?.takeIf { it > 0 }
+        val duration = activeData?.screenWidget?.autoRotateDuration?.let { if (it > 0) it else null }
             ?: (AUTO_ROTATE_INTERVAL_MS / 1000).toInt()
         val intervalMs = duration * 1000L
 
         val runnable = object : Runnable {
             override fun run() {
-                val adapter = holder.adapter
-                if (adapter != null && adapter.size() > 1 && !holder.card.hasFocus() && !holder.isTrailerPlaying) {
-                    val next = (holder.selectedIndex + 1) % adapter.size()
+                val count = holder.items.size
+                if (count > 1 && !holder.card.hasFocus() && !holder.isTrailerPlaying) {
+                    val next = (holder.selectedIndex + 1) % count
                     holder.selectedIndex = next
                     playJioHotstarShift(holder, 1) {
                         drainPendingAdvance(holder)
@@ -1214,8 +1185,7 @@ class HeroCarouselRowPresenter(
         cancelPendingAutoplay()
 
         if (holder.isShifting || holder.cardViews.isEmpty()) return
-        val adapter = holder.adapter ?: return
-        val currentItem = itemAt(adapter, holder.selectedIndex) ?: return
+        val currentItem = itemAt(holder, holder.selectedIndex) ?: return
         val trailerUrl = resolveAsset(holder.stack.context, currentItem, true)?.trailerUrl
         if (trailerUrl.isNullOrEmpty()) return
 
@@ -1239,7 +1209,6 @@ class HeroCarouselRowPresenter(
         val textureView = activeCardSlot.textureView
         val context = holder.stack.context
 
-        // Stop previous active card if any
         if (activeHolder !== holder) {
             activeHolder?.revertToPoster()
         }

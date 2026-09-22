@@ -27,8 +27,9 @@ class MainActivity : FragmentActivity() {
         setContentView(R.layout.activity_main)
 
         if (savedInstanceState == null) {
+            val listFragment = com.example.ott.sott.presenter.ListFragment()
             supportFragmentManager.beginTransaction()
-                .replace(R.id.main_browse_fragment, MainBrowseFragment())
+                .replace(R.id.main_browse_fragment, listFragment)
                 .commit()
         }
 
@@ -54,9 +55,15 @@ class MainActivity : FragmentActivity() {
             } else if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
                 val focused = currentFocus
                 if (focused != null && isNavDescendant(focused)) {
+                    closeSideNav()
                     val hero = findViewById<View>(R.id.hero_card)
                     if (hero != null && hero.isShown) {
                         hero.requestFocus()
+                        return true
+                    }
+                    val listFragment = supportFragmentManager.findFragmentById(R.id.main_browse_fragment)
+                    if (listFragment?.view != null) {
+                        listFragment.view?.requestFocus()
                         return true
                     }
                 }
@@ -86,17 +93,55 @@ class MainActivity : FragmentActivity() {
                 view.post { updateNavExpansion() }
             }
 
-            icon.setOnClickListener {
-                if (iconId == R.id.nav_home) {
-                    Log.d(TAG, "Nav: Home (already showing)")
+            icon.setOnKeyListener { _, keyCode, event ->
+                if (event.action == KeyEvent.ACTION_DOWN && (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER)) {
+                    icon.performClick()
+                    true
                 } else {
-                    Toast.makeText(this, "$label - coming soon", Toast.LENGTH_SHORT).show()
+                    false
                 }
+            }
+
+            icon.setOnClickListener {
+                Log.d(TAG, "Nav clicked: $label ($iconId)")
                 selectNavItem(icon)
+                closeSideNav()
+                val listFragment = supportFragmentManager.findFragmentById(R.id.main_browse_fragment) as? com.example.ott.sott.presenter.ListFragment
+                when (iconId) {
+                    R.id.nav_home -> {
+                        listFragment?.loadTab(com.example.ott.sott.presenter.ScreenType.HOME)
+                        listFragment?.view?.post {
+                            findViewById<View>(R.id.hero_card)?.requestFocus() ?: listFragment.view?.requestFocus()
+                        }
+                    }
+                    R.id.nav_movies -> {
+                        listFragment?.loadTab(com.example.ott.sott.presenter.ScreenType.MOVIES)
+                        listFragment?.view?.post {
+                            listFragment.view?.requestFocus()
+                        }
+                    }
+                    else -> {
+                        Toast.makeText(this, "$label - coming soon", Toast.LENGTH_SHORT).show()
+                    }
+                }
             }
         }
 
         selectNavItem(findViewById(R.id.nav_home))
+    }
+
+    fun closeSideNav() {
+        navExpanded = false
+        animateNavWidth(COLLAPSED_WIDTH_DP)
+        listOf(
+            R.id.nav_home_label,
+            R.id.nav_search_label,
+            R.id.nav_movies_label,
+            R.id.nav_shows_label,
+            R.id.nav_profile_label
+        ).forEach { labelId ->
+            findViewById<TextView>(labelId)?.let { animateLabel(it, false) }
+        }
     }
 
     /** Persistent "current section" indicator - independent of transient D-pad focus. */
