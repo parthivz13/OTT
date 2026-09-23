@@ -248,12 +248,14 @@ class HeroCarouselRowPresenter(
                 startAutoRotate(viewHolder)
             }
 
-            viewHolder.onItemViewSelectedListener?.onItemSelected(
-                null,
-                currentItem(viewHolder),
-                viewHolder,
-                viewHolder.row
-            )
+            if (hasFocus) {
+                viewHolder.onItemViewSelectedListener?.onItemSelected(
+                    null,
+                    currentItem(viewHolder),
+                    viewHolder,
+                    viewHolder.row
+                )
+            }
         }
 
         viewHolder.card.setOnClickListener {

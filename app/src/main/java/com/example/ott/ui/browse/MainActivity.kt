@@ -21,6 +21,49 @@ class MainActivity : FragmentActivity() {
     private var selectedNavIcon: ImageView? = null
     private var widthAnimator: ValueAnimator? = null
 
+    private var currentBackdropUrl: String? = null
+    private val backdropImageView: ImageView? by lazy { findViewById(R.id.iv_global_backdrop) }
+    private val backdropScrimView: View? by lazy { findViewById(R.id.view_backdrop_scrim) }
+
+    fun updateGlobalBackdrop(imageUrl: String?) {
+        if (imageUrl.isNullOrEmpty()) {
+            clearGlobalBackdrop()
+            return
+        }
+        if (currentBackdropUrl == imageUrl) return
+        currentBackdropUrl = imageUrl
+
+        val iv = backdropImageView ?: return
+        val scrim = backdropScrimView ?: return
+
+        scrim.animate().cancel()
+        scrim.animate().alpha(1f).setDuration(300).start()
+
+        com.bumptech.glide.Glide.with(this)
+            .load(imageUrl)
+            .transition(com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions.withCrossFade(300))
+            .into(iv)
+
+        iv.animate().cancel()
+        iv.animate().alpha(1f).setDuration(300).start()
+    }
+
+    fun clearGlobalBackdrop() {
+        if (currentBackdropUrl == null) return
+        currentBackdropUrl = null
+
+        val iv = backdropImageView ?: return
+        val scrim = backdropScrimView ?: return
+
+        iv.animate().cancel()
+        iv.animate().alpha(0f).setDuration(300).withEndAction {
+            iv.setImageDrawable(null)
+        }.start()
+
+        scrim.animate().cancel()
+        scrim.animate().alpha(0f).setDuration(300).start()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         BackgroundManager.getInstance(this).attach(window)

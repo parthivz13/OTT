@@ -2,7 +2,24 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/screen_scrim">
+    android:background="#0B0E14">
+
+    <!-- Global Dynamic Backdrop for Center-stay Rails (JioHotstar style) -->
+    <ImageView
+        android:id="@+id/iv_global_backdrop"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:contentDescription="@null"
+        android:alpha="0" />
+
+    <!-- Gradient Scrim overlay for readability (darker at bottom and left) -->
+    <View
+        android:id="@+id/view_backdrop_scrim"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/hotstar_backdrop_scrim"
+        android:alpha="0" />
 
     <FrameLayout
         android:id="@+id/main_browse_fragment"

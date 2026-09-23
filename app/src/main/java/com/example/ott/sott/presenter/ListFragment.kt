@@ -45,6 +45,11 @@ import com.example.ott.ui.rows.stack.HeroCarouselRowPresenter
 import com.google.gson.Gson
 import kotlinx.coroutines.launch
 import java.util.Collections
+import com.example.ott.data.model.Title
+import com.example.ott.sott.models.CustomKalturaAsset
+import com.example.ott.sott.utils.AppCommonMethod
+import com.example.ott.sott.utils.constants.AppConstants
+import com.example.ott.ui.browse.MainActivity
 
 enum class ScreenType {
     HOME,
@@ -141,7 +146,13 @@ class ListFragment : RowsSupportFragment() {
         setOnItemViewClickedListener(ItemViewClickListener())
 
         val alignmentPx = resources.getDimensionPixelSize(R.dimen.row_alignment_offset)
-        setAlignment(alignmentPx)
+        verticalGridView?.apply {
+            windowAlignment = BaseGridView.WINDOW_ALIGN_BOTH_EDGE
+            windowAlignmentOffsetPercent = BaseGridView.WINDOW_ALIGN_OFFSET_PERCENT_DISABLED
+            windowAlignmentOffset = alignmentPx
+            itemAlignmentOffset = 0
+            itemAlignmentOffsetPercent = 0f
+        }
 
         setupInstantVerticalNavigation()
 
@@ -207,13 +218,45 @@ class ListFragment : RowsSupportFragment() {
         }
     }
 
+    fun isCenterStayRail(row: Row?, railCommonData: RailCommonData?): Boolean {
+        if (row is ExpandableHeroCarouselRow) return false
+        val screenWidget = railCommonData?.screenWidget
+        if (isHeroCarousel(screenWidget)) return false
+        val predef = screenWidget?.predefPlaylistType
+        if (predef.equals(PredefinePlaylistType.CON_W.name, ignoreCase = true)) return false
+        if (screenWidget?.railCardType.equals("EXPANDED", ignoreCase = true)) return false
+        return true
+    }
+
+    private fun updateDynamicBackdrop(item: Any?) {
+        val imageUrl = when (item) {
+            is Title -> item.backdropUrl ?: item.posterUrl
+            is Asset -> {
+                item.images?.takeIf { it.isNotEmpty() }?.let {
+                    AppCommonMethod.getCardwiseImage(it, AppConstants.RATIO_16X9_cover, 1920, 1080)
+                } ?: item.images?.firstOrNull()?.url
+            }
+            is CustomAsset -> null
+            is CustomKalturaAsset -> item.images?.firstOrNull()?.url
+            is com.example.ott.EnveuCategoryServices.Asset -> item.images?.firstOrNull()?.url
+            else -> null
+        }
+        (activity as? MainActivity)?.updateGlobalBackdrop(imageUrl)
+    }
+
     fun updateRowAlignment(hasBrandingLogo: Boolean, railCommonData: RailCommonData?) {
+        val isCenter = isCenterStayRail(null, railCommonData)
+        if (isCenter) {
+            verticalGridView?.windowAlignmentOffsetPercent = 42f
+            verticalGridView?.windowAlignmentOffset = 0
+            return
+        }
         val alignment = if (hasBrandingLogo) {
             resources.getDimensionPixelSize(R.dimen.row_alignment_offset1)
         } else {
             resources.getDimensionPixelSize(R.dimen.row_alignment_offset)
         }
-
+        verticalGridView?.windowAlignmentOffsetPercent = BaseGridView.WINDOW_ALIGN_OFFSET_PERCENT_DISABLED
         if (verticalGridView?.windowAlignmentOffset != alignment) {
             verticalGridView?.windowAlignmentOffset = alignment
         }
@@ -236,6 +279,20 @@ class ListFragment : RowsSupportFragment() {
         if (targetPosition < 0 || targetPosition >= rowsAdapter.size()) return false
 
         val gridView = verticalGridView ?: return false
+
+        val row = rowsAdapter.get(targetPosition) as? Row
+        val key = (row as? ListRow)?.contentDescription?.toString()
+        val railCommonData = hashMap[key]?.railCommonData
+        val isCenter = isCenterStayRail(row, railCommonData)
+        val alignmentPx = resources.getDimensionPixelSize(R.dimen.row_alignment_offset)
+
+        if (isCenter) {
+            gridView.windowAlignmentOffsetPercent = 42f
+            gridView.windowAlignmentOffset = 0
+        } else {
+            gridView.windowAlignmentOffsetPercent = BaseGridView.WINDOW_ALIGN_OFFSET_PERCENT_DISABLED
+            gridView.windowAlignmentOffset = if (isHeroCarousel(railCommonData?.screenWidget)) 0 else alignmentPx
+        }
 
         setSelectedPosition(targetPosition)
 
@@ -671,6 +728,19 @@ class ListFragment : RowsSupportFragment() {
                 return
             }
 
+            val isCenter = isCenterStayRail(row, railCommonData)
+            val alignmentPx = resources.getDimensionPixelSize(R.dimen.row_alignment_offset)
+
+            if (isCenter) {
+                verticalGridView?.windowAlignmentOffsetPercent = 42f
+                verticalGridView?.windowAlignmentOffset = 0
+                updateDynamicBackdrop(item)
+            } else {
+                verticalGridView?.windowAlignmentOffsetPercent = BaseGridView.WINDOW_ALIGN_OFFSET_PERCENT_DISABLED
+                verticalGridView?.windowAlignmentOffset = if (isHeroCarousel(railCommonData.screenWidget)) 0 else alignmentPx
+                (activity as? MainActivity)?.clearGlobalBackdrop()
+            }
+
             pendingHeroUpdate?.let { heroUpdateHandler.removeCallbacks(it) }
             pendingHeroUpdate = Runnable {
                 onItemInteractionListener?.onItemSelected1(
@@ -740,6 +810,7 @@ class ListFragment : RowsSupportFragment() {
 
         HeroCarouselRowPresenter.releasePlayer()
         HeroCarouselCardPresenter.releasePlayer()
+        (activity as? MainActivity)?.clearGlobalBackdrop()
         super.onDestroyView()
     }
 }
