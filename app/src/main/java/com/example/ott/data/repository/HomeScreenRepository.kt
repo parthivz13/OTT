@@ -50,7 +50,8 @@ class HomeScreenRepository {
                 displayOrder = 3,
                 type = "RAIL",
                 railCardType = "EXPANDED",
-                autoPlay = true
+                autoPlay = true,
+                autoRotate = false
             ) to RailTypes.CAROUSEL_LDS_LANDSCAPE,
 
             BaseCategory(

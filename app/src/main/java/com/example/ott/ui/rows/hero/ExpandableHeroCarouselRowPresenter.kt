@@ -68,7 +68,7 @@ class ExpandableHeroCarouselRowPresenter(
         gridView.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         (listRowHolder.view as? ViewGroup)?.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
 
-        // Detect when focus enters or leaves the entire carousel row (e.g. DPAD Up/Down)
+        // Detect when focus enters the carousel row (e.g. DPAD Up/Down)
         gridView.setOnFocusChangeListener { _, hasFocus ->
             if (hasFocus) {
                 carouselFocusListener?.onCarouselFocusChanged(true)
@@ -84,20 +84,6 @@ class ExpandableHeroCarouselRowPresenter(
                         val vh = gridView.findViewHolderForAdapterPosition(gridView.selectedPosition)
                         if (vh != null && !vh.itemView.hasFocus()) {
                             vh.itemView.requestFocus()
-                        }
-                    }
-                }
-            } else {
-                // gridView loses isFocused when its child card gains focus.
-                // Post-check ensures we only tear down if focus has completely left the row and its descendants.
-                gridView.post {
-                    if (!gridView.hasFocus()) {
-                        HeroCarouselCardPresenter.stopActiveVideo()
-                        carouselFocusListener?.onCarouselFocusChanged(false)
-
-                        // If this row does NOT keep cards expanded, collapse the last expanded card now
-                        if (!keepExpandedWhenUnfocused) {
-                            HeroCarouselCardPresenter.collapseLastExpanded()
                         }
                     }
                 }

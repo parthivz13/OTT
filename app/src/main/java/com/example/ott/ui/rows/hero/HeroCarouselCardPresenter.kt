@@ -578,7 +578,9 @@ class HeroCarouselCardPresenter(
         val gridView = listRowView.gridView
         val pos = gridView.getChildAdapterPosition(holder.rootView)
         if (pos != androidx.recyclerview.widget.RecyclerView.NO_POSITION && holder.rootView.hasFocus()) {
-            gridView.setSelectedPositionSmooth(pos)
+            if (gridView.selectedPosition != pos) {
+                gridView.setSelectedPositionSmooth(pos)
+            }
         }
     }
 
@@ -661,6 +663,8 @@ class HeroCarouselCardPresenter(
 
                 // After focus settles, decide whether to collapse or keep expanded
                 holder.rootView.post {
+                    if (holder.rootView.hasFocus()) return@post
+
                     val focusedView = holder.rootView.rootView.findFocus()
                     val isStillInside = focusedView?.let { isViewInsideCarousel(it) } ?: false
 
@@ -706,7 +710,7 @@ class HeroCarouselCardPresenter(
                 return@post
             }
 
-            val autoRotateEnabled = railCommonData.screenWidget?.autoRotate == true
+            val autoRotateEnabled = keepExpandedWhenUnfocused && railCommonData.screenWidget?.autoRotate == true
             if (!autoRotateEnabled) {
                 HeroCarouselAutoSlideController.unregisterRow(rowId)
                 return@post
