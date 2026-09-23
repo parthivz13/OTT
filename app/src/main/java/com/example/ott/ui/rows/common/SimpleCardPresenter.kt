@@ -24,6 +24,10 @@ class SimpleCardPresenter : Presenter() {
             .inflate(R.layout.card_simple_item, parent, false)
         val holder = ViewHolder(view)
         view.setOnFocusChangeListener { _, hasFocus ->
+            val density = parent.resources.displayMetrics.density
+            holder.focusRing.elevation = if (hasFocus) 14f * density else 0f
+            holder.focusRing.translationZ = if (hasFocus) 4f * density else 0f
+            if (hasFocus) holder.focusRing.bringToFront()
             holder.focusRing.visibility = if (hasFocus) View.VISIBLE else View.INVISIBLE
         }
         return holder

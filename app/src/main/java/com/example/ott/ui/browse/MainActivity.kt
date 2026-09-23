@@ -61,10 +61,13 @@ class MainActivity : FragmentActivity() {
                         hero.requestFocus()
                         return true
                     }
-                    val listFragment = supportFragmentManager.findFragmentById(R.id.main_browse_fragment)
-                    if (listFragment?.view != null) {
-                        listFragment.view?.requestFocus()
-                        return true
+                    val listFragment = supportFragmentManager.findFragmentById(R.id.main_browse_fragment) as? com.example.ott.sott.presenter.ListFragment
+                    if (listFragment != null) {
+                        if (listFragment.requestChildFocus()) return true
+                        if (listFragment.view != null) {
+                            listFragment.view?.requestFocus()
+                            return true
+                        }
                     }
                 }
             }

@@ -220,6 +220,7 @@ class ListFragment : RowsSupportFragment() {
     }
 
     private fun setupInstantVerticalNavigation() {
+        verticalGridView?.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         verticalGridView?.setOnKeyInterceptListener { event ->
             if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyInterceptListener false
 
@@ -236,18 +237,44 @@ class ListFragment : RowsSupportFragment() {
 
         val gridView = verticalGridView ?: return false
 
-        gridView.scrollToPosition(targetPosition)
+        setSelectedPosition(targetPosition)
 
         gridView.post {
             val holder = gridView.findViewHolderForAdapterPosition(targetPosition)
-            holder?.itemView?.apply {
-                animate().cancel()
-                alpha = 1f
-                requestFocus()
+            if (holder is ListRowPresenter.ViewHolder) {
+                val hGridView = holder.gridView
+                val childHolder = hGridView.findViewHolderForAdapterPosition(hGridView.selectedPosition)
+                if (childHolder != null) {
+                    childHolder.itemView.requestFocus()
+                } else {
+                    hGridView.post {
+                        val ch = hGridView.findViewHolderForAdapterPosition(hGridView.selectedPosition)
+                        ch?.itemView?.requestFocus() ?: holder.itemView.requestFocus()
+                    }
+                }
+            } else {
+                holder?.itemView?.apply {
+                    animate().cancel()
+                    alpha = 1f
+                    requestFocus()
+                }
             }
         }
 
         return true
+    }
+
+    fun requestChildFocus(): Boolean {
+        val gridView = verticalGridView ?: return false
+        val holder = gridView.findViewHolderForAdapterPosition(selectedPosition)
+        if (holder is ListRowPresenter.ViewHolder) {
+            val hGridView = holder.gridView
+            val childHolder = hGridView.findViewHolderForAdapterPosition(hGridView.selectedPosition)
+            if (childHolder != null) {
+                return childHolder.itemView.requestFocus()
+            }
+        }
+        return holder?.itemView?.requestFocus() ?: gridView.requestFocus()
     }
 
     fun resetForNewMenu() {

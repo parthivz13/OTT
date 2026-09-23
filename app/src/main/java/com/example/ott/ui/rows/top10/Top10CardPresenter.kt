@@ -37,33 +37,18 @@ class Top10CardPresenter : Presenter() {
                 holder.root.bringToFront()
                 (holder.root.parent as? ViewGroup)?.invalidate()
 
-                // Focus scaling commented out as requested
-                // holder.root.animate()
-                //     .scaleX(1.08f)
-                //     .scaleY(1.08f)
-                //     .setDuration(180L)
-                //     .setInterpolator(DecelerateInterpolator(1.8f))
-                //     .start()
-
                 holder.cardSurface.cardElevation = 10f * density
-                holder.focusRing.animate()
-                    .alpha(1f)
-                    .setDuration(160L)
-                    .start()
+                holder.focusRing.elevation = 14f * density
+                holder.focusRing.translationZ = 4f * density
+                holder.focusRing.alpha = 1f
+                holder.focusRing.visibility = View.VISIBLE
+                holder.focusRing.bringToFront()
             } else {
-                // Focus scaling commented out as requested
-                // holder.root.animate()
-                //     .scaleX(1.0f)
-                //     .scaleY(1.0f)
-                //     .setDuration(180L)
-                //     .setInterpolator(DecelerateInterpolator(1.8f))
-                //     .start()
-
                 holder.cardSurface.cardElevation = 3f * density
-                holder.focusRing.animate()
-                    .alpha(0f)
-                    .setDuration(160L)
-                    .start()
+                holder.focusRing.elevation = 0f
+                holder.focusRing.translationZ = 0f
+                holder.focusRing.alpha = 0f
+                holder.focusRing.visibility = View.INVISIBLE
             }
         }
 

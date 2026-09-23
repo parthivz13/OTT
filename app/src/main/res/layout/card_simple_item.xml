@@ -34,7 +34,8 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:background="@drawable/card_focus_ring"
-            android:elevation="8dp"
+            android:elevation="14dp"
+            android:translationZ="4dp"
             android:visibility="invisible" />
     </FrameLayout>
 
