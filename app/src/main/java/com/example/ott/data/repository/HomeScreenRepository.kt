@@ -47,17 +47,17 @@ class HomeScreenRepository {
             BaseCategory(
                 Id = "widget_drama",
                 name = "Critically Acclaimed Drama",
-                displayOrder = 3
-            ) to RailTypes.HORIZONTAL_LDS_LANDSCAPE,
-
-            BaseCategory(
-                Id = "widget_action",
-                name = "Action & Sci-Fi Hits",
-                displayOrder = 4,
+                displayOrder = 3,
                 type = "RAIL",
                 railCardType = "EXPANDED",
                 autoPlay = true
             ) to RailTypes.CAROUSEL_LDS_LANDSCAPE,
+
+            BaseCategory(
+                Id = "widget_action",
+                name = "Action & Sci-Fi Hits",
+                displayOrder = 4
+            ) to RailTypes.HORIZONTAL_PR_POSTER,
 
             BaseCategory(
                 Id = "widget_comedy",
