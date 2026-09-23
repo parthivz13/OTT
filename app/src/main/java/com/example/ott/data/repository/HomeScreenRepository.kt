@@ -53,8 +53,11 @@ class HomeScreenRepository {
             BaseCategory(
                 Id = "widget_action",
                 name = "Action & Sci-Fi Hits",
-                displayOrder = 4
-            ) to RailTypes.HORIZONTAL_PR_POSTER,
+                displayOrder = 4,
+                type = "RAIL",
+                railCardType = "EXPANDED",
+                autoPlay = true
+            ) to RailTypes.CAROUSEL_LDS_LANDSCAPE,
 
             BaseCategory(
                 Id = "widget_comedy",

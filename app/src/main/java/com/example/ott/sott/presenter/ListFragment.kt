@@ -98,6 +98,11 @@ class ListFragment : RowsSupportFragment() {
     var currentScreenType = ScreenType.HOME
         private set
 
+    private fun isHeroCarousel(screenWidget: BaseCategory?): Boolean {
+        return currentScreenType == ScreenType.HOME &&
+            (screenWidget?.Id == "widget_hero" || (screenWidget?.type == "CAROUSEL" && (screenWidget.displayOrder ?: 0) == 0))
+    }
+
     private val presenterSelector = object : PresenterSelector() {
         override fun getPresenters(): Array<Presenter> {
             return arrayOf(heroCarouselRowPresenter, expandableHeroRowPresenter, listRowPresenter)
@@ -111,10 +116,11 @@ class ListFragment : RowsSupportFragment() {
             val widgetId = row?.contentDescription?.toString()
             val railCommonData = hashMap[widgetId]?.railCommonData
             val railType = railCommonData?.railType
+            val screenWidget = railCommonData?.screenWidget
 
             return when {
                 railType == RailTypes.CAROUSEL_LDS_LANDSCAPE -> {
-                    if (currentScreenType == ScreenType.HOME) {
+                    if (isHeroCarousel(screenWidget)) {
                         heroCarouselRowPresenter
                     } else {
                         expandableHeroRowPresenter
@@ -429,7 +435,8 @@ class ListFragment : RowsSupportFragment() {
         val gridItemPresenterHeader = IconHeaderItem(
             0, screenWidget.name ?: "", screenWidget.widgetImageorLogo ?: ""
         )
-        val listRow = if (result.railType == RailTypes.CAROUSEL_LDS_LANDSCAPE && currentScreenType == ScreenType.MOVIES) {
+        val isHero = isHeroCarousel(screenWidget)
+        val listRow = if (result.railType == RailTypes.CAROUSEL_LDS_LANDSCAPE && !isHero) {
             ExpandableHeroCarouselRow(gridItemPresenterHeader, arrayObjectAdapter).apply {
                 contentDescription = widgetId
             }
@@ -508,16 +515,17 @@ class ListFragment : RowsSupportFragment() {
         val isContinueWatching = screenWidget?.predefPlaylistType == "CON_W"
         val isBrandingHeader = screenWidget?.brandingHeader == true
 
+        val isHero = isHeroCarousel(screenWidget)
         val cacheKey =
-            "${railType}_${railCardSize}_${top10}_${autoPlay}_${autoPlayMode}_${isContinueWatching}_${isBrandingHeader}_${transparentBgColor}_${progressBarColor}_${screenWidget?.railCardType}"
+            "${railType}_${railCardSize}_${top10}_${autoPlay}_${autoPlayMode}_${isContinueWatching}_${isBrandingHeader}_${transparentBgColor}_${progressBarColor}_${screenWidget?.railCardType}_${isHero}"
         presenterCache[cacheKey]?.let { return it }
 
         val presenter = when (railType) {
             RailTypes.CAROUSEL_LDS_LANDSCAPE -> HeroCarouselCardPresenter(
                 result,
-                // On HOME screen the carousel keeps the last focused card expanded (hero mode).
-                // On MOVIES the card collapses when focus leaves (expandable mode).
-                keepExpandedWhenUnfocused = (currentScreenType == ScreenType.HOME)
+                // On HOME screen the top hero carousel keeps the last focused card expanded (hero mode).
+                // On all other expandable rails (including 4th rail on HOME or MOVIES), the card collapses when focus leaves (rail mode).
+                keepExpandedWhenUnfocused = isHero
             )
             RailTypes.HORIZONTAL_LDS_LANDSCAPE -> {
                 when {
@@ -592,7 +600,8 @@ class ListFragment : RowsSupportFragment() {
                 rail.screenWidget?.name ?: ""
             }
             val headerItem = IconHeaderItem(0, headerText, rail.screenWidget?.widgetImageorLogo ?: "")
-            val listRow = if (rail.railType == RailTypes.CAROUSEL_LDS_LANDSCAPE && currentScreenType == ScreenType.MOVIES) {
+            val isHero = isHeroCarousel(rail.screenWidget)
+            val listRow = if (rail.railType == RailTypes.CAROUSEL_LDS_LANDSCAPE && !isHero) {
                 ExpandableHeroCarouselRow(headerItem, arrayAdapter).apply {
                     contentDescription = rail.screenWidget?.Id ?: ""
                 }
