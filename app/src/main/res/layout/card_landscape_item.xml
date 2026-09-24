@@ -64,7 +64,7 @@
         android:layout_width="match_parent"
         android:layout_height="146dp"
         android:background="@drawable/card_focus_ring"
-        android:elevation="6dp"
+        android:elevation="14dp"
         android:alpha="0" />
 
     <!-- External Title below card -->

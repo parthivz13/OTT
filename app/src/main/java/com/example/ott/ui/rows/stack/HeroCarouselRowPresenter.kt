@@ -194,6 +194,9 @@ class HeroCarouselRowPresenter(
             setupSlots(viewHolder)
         }
 
+        // Tag hero_card with live position provider so MainActivity can verify carousel position
+        viewHolder.card.setTag(R.id.hero_card, { viewHolder.selectedIndex })
+
         // D-Pad Remote Navigation
         viewHolder.focusBorder.alpha = if (viewHolder.selectedIndex == 0) 1f else 0f
         viewHolder.card.setOnKeyListener { _, keyCode, event ->
@@ -204,14 +207,12 @@ class HeroCarouselRowPresenter(
                 }
                 KeyEvent.KEYCODE_DPAD_LEFT -> {
                     if (viewHolder.selectedIndex == 0) {
-                        val nextFocus = viewHolder.card.focusSearch(View.FOCUS_LEFT)
-                        if (nextFocus != null && nextFocus !== viewHolder.card) {
-                            nextFocus.requestFocus()
-                        } else {
-                            viewHolder.card.rootView.findViewById<View>(R.id.nav_home)?.requestFocus()
-                        }
-                        true
+                        // Already at first position (pos 0): open side nav and focus selected item!
+                        val success = com.example.ott.ui.browse.MainActivity.instance?.focusSelectedNavItem()
+                            ?: (viewHolder.card.rootView.findViewById<com.example.ott.ui.navigation.SideNavView>(R.id.side_nav_view)?.focusSelectedNavItem() ?: false)
+                        success
                     } else {
+                        // Not at first position (pos > 0): step backwards to the first position!
                         tryAdvance(viewHolder, -1)
                         true
                     }
@@ -248,12 +249,14 @@ class HeroCarouselRowPresenter(
                 startAutoRotate(viewHolder)
             }
 
-            viewHolder.onItemViewSelectedListener?.onItemSelected(
-                null,
-                currentItem(viewHolder),
-                viewHolder,
-                viewHolder.row
-            )
+            if (hasFocus) {
+                viewHolder.onItemViewSelectedListener?.onItemSelected(
+                    null,
+                    currentItem(viewHolder),
+                    viewHolder,
+                    viewHolder.row
+                )
+            }
         }
 
         viewHolder.card.setOnClickListener {

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="26dp"
+    android:height="26dp"
+    android:viewportWidth="26"
+    android:viewportHeight="26">
+    <!-- Glowing cyan circular avatar base -->
+    <path
+        android:fillColor="#FF00B0FF"
+        android:pathData="M13,1 A12,12 0 1,1 13,25 A12,12 0 1,1 13,1" />
+    <!-- Smiling face elements in dark slate -->
+    <!-- Left eye -->
+    <path
+        android:fillColor="#FF070A11"
+        android:pathData="M9,9.5 A1.5,1.5 0 1,1 9,12.5 A1.5,1.5 0 1,1 9,9.5" />
+    <!-- Right eye -->
+    <path
+        android:fillColor="#FF070A11"
+        android:pathData="M17,9.5 A1.5,1.5 0 1,1 17,12.5 A1.5,1.5 0 1,1 17,9.5" />
+    <!-- Smile arc -->
+    <path
+        android:fillColor="#FF070A11"
+        android:pathData="M9,15 c0,2.5 1.8,4.5 4,4.5 s4,-2 4,-4.5 h-1.5 c0,1.7 -1.1,3 -2.5,3 s-2.5,-1.3 -2.5,-3 Z" />
+</vector>

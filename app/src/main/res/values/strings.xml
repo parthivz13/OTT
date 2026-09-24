@@ -3,10 +3,17 @@
     <string name="browse_title">OTT</string>
     <string name="row_trending_now">Trending Now</string>
 
-    <string name="nav_home">Home</string>
+    <string name="nav_connect_phone">Connect Phone</string>
     <string name="nav_search">Search</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_tv">TV</string>
     <string name="nav_movies">Movies</string>
-    <string name="nav_shows">TV Shows</string>
-    <string name="nav_profile">Profile</string>
+    <string name="nav_sports">Sports</string>
+    <string name="nav_categories">Categories</string>
+    <string name="nav_my_space">My Space</string>
+
+    <!-- Legacy aliases for backward compatibility -->
+    <string name="nav_shows">TV</string>
+    <string name="nav_profile">My Space</string>
     <string name="for_text">for</string>
 </resources>

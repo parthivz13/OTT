@@ -53,10 +53,12 @@ class ExpandableHeroCarouselRowPresenter(
 
         // Both-edge alignment ensures focused expanding cards never cut off on either left or right boundary
         gridView.windowAlignment = BaseGridView.WINDOW_ALIGN_BOTH_EDGE
-        gridView.windowAlignmentOffset = (48 * density).toInt()
+        gridView.windowAlignmentOffset = (17 * density).toInt()
         gridView.windowAlignmentOffsetPercent = BaseGridView.WINDOW_ALIGN_OFFSET_PERCENT_DISABLED
         gridView.itemAlignmentOffsetPercent = 0f
         gridView.itemAlignmentOffset = 0
+        listRowHolder.view.setPadding(0, listRowHolder.view.paddingTop, listRowHolder.view.paddingRight, listRowHolder.view.paddingBottom)
+        gridView.setPadding(0, gridView.paddingTop, gridView.paddingRight, gridView.paddingBottom)
 
         var p = gridView.parent
         while (p is ViewGroup && p !is androidx.leanback.widget.VerticalGridView) {
@@ -65,20 +67,44 @@ class ExpandableHeroCarouselRowPresenter(
             p = p.parent
         }
 
-        // Detect when focus leaves the entire carousel row (e.g. DPAD Up/Down)
-        gridView.setOnFocusChangeListener { _, hasFocus ->
-            if (!hasFocus) {
-                HeroCarouselCardPresenter.stopActiveVideo()
-                carouselFocusListener?.onCarouselFocusChanged(false)
+        gridView.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+        (listRowHolder.view as? ViewGroup)?.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
 
-                // If this row does NOT keep cards expanded, collapse the last expanded card now
-                if (!keepExpandedWhenUnfocused) {
-                    HeroCarouselCardPresenter.collapseLastExpanded()
-                }
-            } else {
+        // Detect when focus enters the carousel row (e.g. DPAD Up/Down)
+        gridView.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) {
                 carouselFocusListener?.onCarouselFocusChanged(true)
+                // When focus lands on the row/HorizontalGridView, ensure the selected child card is focused so it expands immediately
+                val pos = gridView.selectedPosition
+                val childHolder = gridView.findViewHolderForAdapterPosition(pos)
+                if (childHolder != null) {
+                    if (!childHolder.itemView.hasFocus()) {
+                        childHolder.itemView.requestFocus()
+                    }
+                } else {
+                    gridView.post {
+                        val vh = gridView.findViewHolderForAdapterPosition(gridView.selectedPosition)
+                        if (vh != null && !vh.itemView.hasFocus()) {
+                            vh.itemView.requestFocus()
+                        }
+                    }
+                }
             }
         }
+
+        // When a child card is selected, ensure it has focus to trigger expansion
+        gridView.setOnChildViewHolderSelectedListener(object : androidx.leanback.widget.OnChildViewHolderSelectedListener() {
+            override fun onChildViewHolderSelected(
+                parent: androidx.recyclerview.widget.RecyclerView,
+                child: androidx.recyclerview.widget.RecyclerView.ViewHolder?,
+                position: Int,
+                subposition: Int
+            ) {
+                if (gridView.hasFocus() && child != null && !child.itemView.hasFocus()) {
+                    child.itemView.requestFocus()
+                }
+            }
+        })
     }
 
     override fun onBindRowViewHolder(holder: RowPresenter.ViewHolder, item: Any) {

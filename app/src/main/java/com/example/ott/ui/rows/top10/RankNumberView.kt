@@ -32,7 +32,7 @@ class RankNumberView @JvmOverloads constructor(
         strokeJoin = Paint.Join.ROUND
         strokeCap = Paint.Cap.ROUND
         typeface = Typeface.create("sans-serif-black", Typeface.BOLD)
-        textAlign = Paint.Align.CENTER
+        textAlign = Paint.Align.LEFT
     }
 
     private val strokeHighlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -42,13 +42,13 @@ class RankNumberView @JvmOverloads constructor(
         strokeJoin = Paint.Join.ROUND
         strokeCap = Paint.Cap.ROUND
         typeface = Typeface.create("sans-serif-black", Typeface.BOLD)
-        textAlign = Paint.Align.CENTER
+        textAlign = Paint.Align.LEFT
     }
 
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         typeface = Typeface.create("sans-serif-black", Typeface.BOLD)
-        textAlign = Paint.Align.CENTER
+        textAlign = Paint.Align.LEFT
     }
 
     var isCardFocused: Boolean = false
@@ -87,11 +87,15 @@ class RankNumberView @JvmOverloads constructor(
         )
     }
 
+    private val textBounds = android.graphics.Rect()
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         if (rankText.isEmpty()) return
 
-        val x = width * 0.5f
+        fillPaint.getTextBounds(rankText, 0, rankText.length, textBounds)
+        val density = resources.displayMetrics.density
+        val x = (4f * density) - textBounds.left.toFloat()
         // Vertically center text baseline
         val fontMetrics = fillPaint.fontMetrics
         val y = (height - (fontMetrics.ascent + fontMetrics.descent)) / 2f

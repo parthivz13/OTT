@@ -47,8 +47,12 @@ class HomeScreenRepository {
             BaseCategory(
                 Id = "widget_drama",
                 name = "Critically Acclaimed Drama",
-                displayOrder = 3
-            ) to RailTypes.HORIZONTAL_LDS_LANDSCAPE,
+                displayOrder = 3,
+                type = "RAIL",
+                railCardType = "EXPANDED",
+                autoPlay = true,
+                autoRotate = false
+            ) to RailTypes.CAROUSEL_LDS_LANDSCAPE,
 
             BaseCategory(
                 Id = "widget_action",

@@ -41,15 +41,15 @@ open class LandScapeCardPresenter(
         val holder = ViewHolder(view)
 
         view.setOnFocusChangeListener { _, hasFocus ->
-            holder.focusRing.animate().cancel()
-            holder.focusRing.animate()
-                .alpha(if (hasFocus) 1f else 0f)
-                .setDuration(160L)
-                .start()
-
-            val elevation = if (hasFocus) 8f else 3f
             val density = parent.resources.displayMetrics.density
+            val elevation = if (hasFocus) 8f else 3f
             holder.surface.cardElevation = elevation * density
+            holder.focusRing.animate().cancel()
+            holder.focusRing.elevation = if (hasFocus) 14f * density else 0f
+            holder.focusRing.translationZ = if (hasFocus) 4f * density else 0f
+            holder.focusRing.alpha = if (hasFocus) 1f else 0f
+            holder.focusRing.visibility = if (hasFocus) View.VISIBLE else View.INVISIBLE
+            if (hasFocus) holder.focusRing.bringToFront()
         }
 
         return holder
@@ -151,15 +151,15 @@ open class TopTenCardPresenter(
 
         view.setOnFocusChangeListener { _, hasFocus ->
             holder.rankNumber.isCardFocused = hasFocus
-            holder.focusRing.animate().cancel()
-            holder.focusRing.animate()
-                .alpha(if (hasFocus) 1f else 0f)
-                .setDuration(160L)
-                .start()
-
-            val elevation = if (hasFocus) 8f else 3f
             val density = parent.resources.displayMetrics.density
+            val elevation = if (hasFocus) 8f else 3f
             holder.surface.cardElevation = elevation * density
+            holder.focusRing.animate().cancel()
+            holder.focusRing.elevation = if (hasFocus) 14f * density else 0f
+            holder.focusRing.translationZ = if (hasFocus) 4f * density else 0f
+            holder.focusRing.alpha = if (hasFocus) 1f else 0f
+            holder.focusRing.visibility = if (hasFocus) View.VISIBLE else View.INVISIBLE
+            if (hasFocus) holder.focusRing.bringToFront()
         }
 
         return holder
@@ -239,15 +239,15 @@ open class ItemPresenter(
         val holder = ViewHolder(view)
 
         view.setOnFocusChangeListener { _, hasFocus ->
-            holder.focusRing.animate().cancel()
-            holder.focusRing.animate()
-                .alpha(if (hasFocus) 1f else 0f)
-                .setDuration(160L)
-                .start()
-
-            val elevation = if (hasFocus) 8f else 3f
             val density = parent.resources.displayMetrics.density
+            val elevation = if (hasFocus) 8f else 3f
             holder.surface.cardElevation = elevation * density
+            holder.focusRing.animate().cancel()
+            holder.focusRing.elevation = if (hasFocus) 14f * density else 0f
+            holder.focusRing.translationZ = if (hasFocus) 4f * density else 0f
+            holder.focusRing.alpha = if (hasFocus) 1f else 0f
+            holder.focusRing.visibility = if (hasFocus) View.VISIBLE else View.INVISIBLE
+            if (hasFocus) holder.focusRing.bringToFront()
         }
 
         return holder

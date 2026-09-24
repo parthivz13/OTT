@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Focused on D-pad: Glowing blue-slate stroke + blue -> gray -> transparent gradient fill -->
+    <item android:state_focused="true">
+        <shape android:shape="rectangle">
+            <corners android:radius="14dp" />
+            <gradient
+                android:angle="0"
+                android:startColor="#8C0084FF"
+                android:centerColor="#3B64748B"
+                android:endColor="#00000000"
+                android:type="linear" />
+            <stroke
+                android:width="1.5dp"
+                android:color="#B360A5FA" />
+        </shape>
+    </item>
+
+    <!-- Selected (Active Screen): blue-cyan stroke + blue -> gray -> transparent gradient fill -->
+    <item android:state_selected="true">
+        <shape android:shape="rectangle">
+            <corners android:radius="14dp" />
+            <gradient
+                android:angle="0"
+                android:startColor="#5E0072E5"
+                android:centerColor="#29475569"
+                android:endColor="#00000000"
+                android:type="linear" />
+            <stroke
+                android:width="1.2dp"
+                android:color="#8A0091FF" />
+        </shape>
+    </item>
+
+    <!-- Idle Normal State: Transparent -->
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="14dp" />
+            <solid android:color="@android:color/transparent" />
+        </shape>
+    </item>
+</selector>

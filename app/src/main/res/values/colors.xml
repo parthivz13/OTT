@@ -22,4 +22,16 @@
     <color name="hotstar_btn_primary_text">#FF0A0E17</color>
     <color name="hotstar_btn_secondary_bg">#2EFFFFFF</color>
     <color name="hotstar_btn_secondary_stroke">#4DFFFFFF</color>
+
+    <!-- Luxury Side Nav Design Tokens -->
+    <color name="nav_glass_bg_start">#F5070A11</color>
+    <color name="nav_glass_bg_mid">#E6090D16</color>
+    <color name="nav_glass_bg_end">#00070A11</color>
+    <color name="nav_pill_focused_bg">#24FFFFFF</color>
+    <color name="nav_pill_focused_stroke">#4DFFFFFF</color>
+    <color name="nav_pill_selected_bg">#1400E5FF</color>
+    <color name="nav_pill_selected_stroke">#3300E5FF</color>
+    <color name="nav_neon_indicator">#FF00E5FF</color>
+    <color name="nav_text_unfocused">#94A3B8</color>
+    <color name="nav_icon_unfocused">#A0ABBA</color>
 </resources>

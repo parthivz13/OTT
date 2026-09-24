@@ -45,10 +45,21 @@ import com.example.ott.ui.rows.stack.HeroCarouselRowPresenter
 import com.google.gson.Gson
 import kotlinx.coroutines.launch
 import java.util.Collections
+import com.example.ott.data.model.Title
+import com.example.ott.sott.models.CustomKalturaAsset
+import com.example.ott.sott.utils.AppCommonMethod
+import com.example.ott.sott.utils.constants.AppConstants
+import com.example.ott.ui.browse.MainActivity
 
 enum class ScreenType {
+    CONNECT_PHONE,
+    SEARCH,
     HOME,
-    MOVIES
+    TV,
+    MOVIES,
+    SPORTS,
+    CATEGORIES,
+    MY_SPACE
 }
 
 class ListFragment : RowsSupportFragment() {
@@ -78,8 +89,37 @@ class ListFragment : RowsSupportFragment() {
             gridView.clipChildren = false
             gridView.clipToPadding = false
             gridView.itemAnimator = SmoothGridItemAnimator()
-            gridView.setSaveChildrenPolicy(BaseGridView.SAVE_NO_CHILD)
             return viewHolder
+        }
+
+        override fun initializeRowViewHolder(holder: RowPresenter.ViewHolder) {
+            super.initializeRowViewHolder(holder)
+            val listRowHolder = holder as? ListRowPresenter.ViewHolder ?: return
+            val gridView = listRowHolder.gridView
+            val density = gridView.resources.displayMetrics.density
+
+            gridView.windowAlignment = BaseGridView.WINDOW_ALIGN_BOTH_EDGE
+            gridView.windowAlignmentOffset = (17 * density).toInt()
+            gridView.windowAlignmentOffsetPercent = BaseGridView.WINDOW_ALIGN_OFFSET_PERCENT_DISABLED
+            gridView.itemAlignmentOffsetPercent = 0f
+            gridView.itemAlignmentOffset = 0
+            listRowHolder.view.setPadding(0, listRowHolder.view.paddingTop, listRowHolder.view.paddingRight, listRowHolder.view.paddingBottom)
+            gridView.setPadding(0, gridView.paddingTop, gridView.paddingRight, gridView.paddingBottom)
+        }
+
+        override fun onBindRowViewHolder(holder: RowPresenter.ViewHolder, item: Any) {
+            super.onBindRowViewHolder(holder, item)
+            val listRowHolder = holder as? ListRowPresenter.ViewHolder ?: return
+            val gridView = listRowHolder.gridView
+            val density = gridView.resources.displayMetrics.density
+
+            gridView.windowAlignment = BaseGridView.WINDOW_ALIGN_BOTH_EDGE
+            gridView.windowAlignmentOffset = (17 * density).toInt()
+            gridView.windowAlignmentOffsetPercent = BaseGridView.WINDOW_ALIGN_OFFSET_PERCENT_DISABLED
+            gridView.itemAlignmentOffsetPercent = 0f
+            gridView.itemAlignmentOffset = 0
+            listRowHolder.view.setPadding(0, listRowHolder.view.paddingTop, listRowHolder.view.paddingRight, listRowHolder.view.paddingBottom)
+            gridView.setPadding(0, gridView.paddingTop, gridView.paddingRight, gridView.paddingBottom)
         }
     }.apply {
         shadowEnabled = false
@@ -98,6 +138,11 @@ class ListFragment : RowsSupportFragment() {
     var currentScreenType = ScreenType.HOME
         private set
 
+    private fun isHeroCarousel(screenWidget: BaseCategory?): Boolean {
+        return currentScreenType == ScreenType.HOME &&
+            (screenWidget?.Id == "widget_hero" || (screenWidget?.type == "CAROUSEL" && (screenWidget.displayOrder ?: 0) == 0))
+    }
+
     private val presenterSelector = object : PresenterSelector() {
         override fun getPresenters(): Array<Presenter> {
             return arrayOf(heroCarouselRowPresenter, expandableHeroRowPresenter, listRowPresenter)
@@ -111,10 +156,11 @@ class ListFragment : RowsSupportFragment() {
             val widgetId = row?.contentDescription?.toString()
             val railCommonData = hashMap[widgetId]?.railCommonData
             val railType = railCommonData?.railType
+            val screenWidget = railCommonData?.screenWidget
 
             return when {
                 railType == RailTypes.CAROUSEL_LDS_LANDSCAPE -> {
-                    if (currentScreenType == ScreenType.HOME) {
+                    if (isHeroCarousel(screenWidget)) {
                         heroCarouselRowPresenter
                     } else {
                         expandableHeroRowPresenter
@@ -135,7 +181,15 @@ class ListFragment : RowsSupportFragment() {
         setOnItemViewClickedListener(ItemViewClickListener())
 
         val alignmentPx = resources.getDimensionPixelSize(R.dimen.row_alignment_offset)
-        setAlignment(alignmentPx)
+        val density = resources.displayMetrics.density
+        verticalGridView?.apply {
+            windowAlignment = BaseGridView.WINDOW_ALIGN_BOTH_EDGE
+            windowAlignmentOffsetPercent = BaseGridView.WINDOW_ALIGN_OFFSET_PERCENT_DISABLED
+            windowAlignmentOffset = alignmentPx
+            itemAlignmentOffset = 0
+            itemAlignmentOffsetPercent = 0f
+            setItemSpacing((8 * density).toInt())
+        }
 
         setupInstantVerticalNavigation()
 
@@ -147,6 +201,9 @@ class ListFragment : RowsSupportFragment() {
         when (screenType) {
             ScreenType.HOME -> loadHomeScreenRails()
             ScreenType.MOVIES -> loadMovieScreenRails()
+            ScreenType.TV, ScreenType.SPORTS, ScreenType.CATEGORIES, ScreenType.MY_SPACE, ScreenType.SEARCH, ScreenType.CONNECT_PHONE -> {
+                loadHomeScreenRails()
+            }
         }
     }
 
@@ -201,19 +258,52 @@ class ListFragment : RowsSupportFragment() {
         }
     }
 
+    fun isCenterStayRail(row: Row?, railCommonData: RailCommonData?): Boolean {
+        if (row is ExpandableHeroCarouselRow) return false
+        val screenWidget = railCommonData?.screenWidget
+        if (isHeroCarousel(screenWidget)) return false
+        val predef = screenWidget?.predefPlaylistType
+        if (predef.equals(PredefinePlaylistType.CON_W.name, ignoreCase = true)) return false
+        if (screenWidget?.railCardType.equals("EXPANDED", ignoreCase = true)) return false
+        return true
+    }
+
+    private fun updateDynamicBackdrop(item: Any?) {
+        val imageUrl = when (item) {
+            is Title -> item.backdropUrl ?: item.posterUrl
+            is Asset -> {
+                item.images?.takeIf { it.isNotEmpty() }?.let {
+                    AppCommonMethod.getCardwiseImage(it, AppConstants.RATIO_16X9_cover, 1920, 1080)
+                } ?: item.images?.firstOrNull()?.url
+            }
+            is CustomAsset -> null
+            is CustomKalturaAsset -> item.images?.firstOrNull()?.url
+            is com.example.ott.EnveuCategoryServices.Asset -> item.images?.firstOrNull()?.url
+            else -> null
+        }
+        (activity as? MainActivity)?.updateGlobalBackdrop(imageUrl)
+    }
+
     fun updateRowAlignment(hasBrandingLogo: Boolean, railCommonData: RailCommonData?) {
+        val isCenter = isCenterStayRail(null, railCommonData)
+        if (isCenter) {
+            verticalGridView?.windowAlignmentOffsetPercent = 42f
+            verticalGridView?.windowAlignmentOffset = 0
+            return
+        }
         val alignment = if (hasBrandingLogo) {
             resources.getDimensionPixelSize(R.dimen.row_alignment_offset1)
         } else {
             resources.getDimensionPixelSize(R.dimen.row_alignment_offset)
         }
-
+        verticalGridView?.windowAlignmentOffsetPercent = BaseGridView.WINDOW_ALIGN_OFFSET_PERCENT_DISABLED
         if (verticalGridView?.windowAlignmentOffset != alignment) {
             verticalGridView?.windowAlignmentOffset = alignment
         }
     }
 
     private fun setupInstantVerticalNavigation() {
+        verticalGridView?.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         verticalGridView?.setOnKeyInterceptListener { event ->
             if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyInterceptListener false
 
@@ -230,18 +320,58 @@ class ListFragment : RowsSupportFragment() {
 
         val gridView = verticalGridView ?: return false
 
-        gridView.scrollToPosition(targetPosition)
+        val row = rowsAdapter.get(targetPosition) as? Row
+        val key = (row as? ListRow)?.contentDescription?.toString()
+        val railCommonData = hashMap[key]?.railCommonData
+        val isCenter = isCenterStayRail(row, railCommonData)
+        val alignmentPx = resources.getDimensionPixelSize(R.dimen.row_alignment_offset)
+
+        if (isCenter) {
+            gridView.windowAlignmentOffsetPercent = 42f
+            gridView.windowAlignmentOffset = 0
+        } else {
+            gridView.windowAlignmentOffsetPercent = BaseGridView.WINDOW_ALIGN_OFFSET_PERCENT_DISABLED
+            gridView.windowAlignmentOffset = if (isHeroCarousel(railCommonData?.screenWidget)) 0 else alignmentPx
+        }
+
+        setSelectedPosition(targetPosition)
 
         gridView.post {
             val holder = gridView.findViewHolderForAdapterPosition(targetPosition)
-            holder?.itemView?.apply {
-                animate().cancel()
-                alpha = 1f
-                requestFocus()
+            if (holder is ListRowPresenter.ViewHolder) {
+                val hGridView = holder.gridView
+                val childHolder = hGridView.findViewHolderForAdapterPosition(hGridView.selectedPosition)
+                if (childHolder != null) {
+                    childHolder.itemView.requestFocus()
+                } else {
+                    hGridView.post {
+                        val ch = hGridView.findViewHolderForAdapterPosition(hGridView.selectedPosition)
+                        ch?.itemView?.requestFocus() ?: holder.itemView.requestFocus()
+                    }
+                }
+            } else {
+                holder?.itemView?.apply {
+                    animate().cancel()
+                    alpha = 1f
+                    requestFocus()
+                }
             }
         }
 
         return true
+    }
+
+    fun requestChildFocus(): Boolean {
+        val gridView = verticalGridView ?: return false
+        val holder = gridView.findViewHolderForAdapterPosition(selectedPosition)
+        if (holder is ListRowPresenter.ViewHolder) {
+            val hGridView = holder.gridView
+            val childHolder = hGridView.findViewHolderForAdapterPosition(hGridView.selectedPosition)
+            if (childHolder != null) {
+                return childHolder.itemView.requestFocus()
+            }
+        }
+        return holder?.itemView?.requestFocus() ?: gridView.requestFocus()
     }
 
     fun resetForNewMenu() {
@@ -429,7 +559,8 @@ class ListFragment : RowsSupportFragment() {
         val gridItemPresenterHeader = IconHeaderItem(
             0, screenWidget.name ?: "", screenWidget.widgetImageorLogo ?: ""
         )
-        val listRow = if (result.railType == RailTypes.CAROUSEL_LDS_LANDSCAPE && currentScreenType == ScreenType.MOVIES) {
+        val isHero = isHeroCarousel(screenWidget)
+        val listRow = if (result.railType == RailTypes.CAROUSEL_LDS_LANDSCAPE && !isHero) {
             ExpandableHeroCarouselRow(gridItemPresenterHeader, arrayObjectAdapter).apply {
                 contentDescription = widgetId
             }
@@ -508,16 +639,17 @@ class ListFragment : RowsSupportFragment() {
         val isContinueWatching = screenWidget?.predefPlaylistType == "CON_W"
         val isBrandingHeader = screenWidget?.brandingHeader == true
 
+        val isHero = isHeroCarousel(screenWidget)
         val cacheKey =
-            "${railType}_${railCardSize}_${top10}_${autoPlay}_${autoPlayMode}_${isContinueWatching}_${isBrandingHeader}_${transparentBgColor}_${progressBarColor}_${screenWidget?.railCardType}"
+            "${railType}_${railCardSize}_${top10}_${autoPlay}_${autoPlayMode}_${isContinueWatching}_${isBrandingHeader}_${transparentBgColor}_${progressBarColor}_${screenWidget?.railCardType}_${isHero}"
         presenterCache[cacheKey]?.let { return it }
 
         val presenter = when (railType) {
             RailTypes.CAROUSEL_LDS_LANDSCAPE -> HeroCarouselCardPresenter(
                 result,
-                // On HOME screen the carousel keeps the last focused card expanded (hero mode).
-                // On MOVIES the card collapses when focus leaves (expandable mode).
-                keepExpandedWhenUnfocused = (currentScreenType == ScreenType.HOME)
+                // On HOME screen the top hero carousel keeps the last focused card expanded (hero mode).
+                // On all other expandable rails (including 4th rail on HOME or MOVIES), the card collapses when focus leaves (rail mode).
+                keepExpandedWhenUnfocused = isHero
             )
             RailTypes.HORIZONTAL_LDS_LANDSCAPE -> {
                 when {
@@ -592,7 +724,8 @@ class ListFragment : RowsSupportFragment() {
                 rail.screenWidget?.name ?: ""
             }
             val headerItem = IconHeaderItem(0, headerText, rail.screenWidget?.widgetImageorLogo ?: "")
-            val listRow = if (rail.railType == RailTypes.CAROUSEL_LDS_LANDSCAPE && currentScreenType == ScreenType.MOVIES) {
+            val isHero = isHeroCarousel(rail.screenWidget)
+            val listRow = if (rail.railType == RailTypes.CAROUSEL_LDS_LANDSCAPE && !isHero) {
                 ExpandableHeroCarouselRow(headerItem, arrayAdapter).apply {
                     contentDescription = rail.screenWidget?.Id ?: ""
                 }
@@ -633,6 +766,19 @@ class ListFragment : RowsSupportFragment() {
             val railCommonData = hashMap[key]?.railCommonData ?: run {
                 LogUtils.e("ListFragment", "railCommonData is null for key: $key")
                 return
+            }
+
+            val isCenter = isCenterStayRail(row, railCommonData)
+            val alignmentPx = resources.getDimensionPixelSize(R.dimen.row_alignment_offset)
+
+            if (isCenter) {
+                verticalGridView?.windowAlignmentOffsetPercent = 42f
+                verticalGridView?.windowAlignmentOffset = 0
+                updateDynamicBackdrop(item)
+            } else {
+                verticalGridView?.windowAlignmentOffsetPercent = BaseGridView.WINDOW_ALIGN_OFFSET_PERCENT_DISABLED
+                verticalGridView?.windowAlignmentOffset = if (isHeroCarousel(railCommonData.screenWidget)) 0 else alignmentPx
+                (activity as? MainActivity)?.clearGlobalBackdrop()
             }
 
             pendingHeroUpdate?.let { heroUpdateHandler.removeCallbacks(it) }
@@ -704,6 +850,7 @@ class ListFragment : RowsSupportFragment() {
 
         HeroCarouselRowPresenter.releasePlayer()
         HeroCarouselCardPresenter.releasePlayer()
+        (activity as? MainActivity)?.clearGlobalBackdrop()
         super.onDestroyView()
     }
 }

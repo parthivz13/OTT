@@ -8,8 +8,10 @@
     android:clipChildren="false"
     android:clipToPadding="false"
     android:focusable="true"
-    android:focusableInTouchMode="true"
-    android:padding="6dp">
+    android:paddingStart="0dp"
+    android:paddingTop="6dp"
+    android:paddingEnd="12dp"
+    android:paddingBottom="6dp">
 
     <!-- Card Container for corner clipping & focus ring -->
     <androidx.cardview.widget.CardView
@@ -311,6 +313,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:alpha="0"
+                android:elevation="14dp"
+                android:translationZ="2dp"
                 android:background="@drawable/hero_card_focus_ring" />
 
         </FrameLayout>

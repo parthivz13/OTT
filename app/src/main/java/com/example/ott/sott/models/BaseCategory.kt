@@ -15,7 +15,7 @@ data class BaseCategory(
     var top10Rails: Boolean? = false,
     var autoPlay: Boolean? = false,
     var autoPlayMode: String? = null,
-    var autoRotate: Boolean? = true,
+    var autoRotate: Boolean? = false,
     var autoRotateDuration: Int? = 5,
     var transparentBgColor: String? = null,
     var progressBarColor: String? = null,

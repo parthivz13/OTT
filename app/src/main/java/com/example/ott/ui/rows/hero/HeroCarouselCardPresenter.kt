@@ -102,6 +102,13 @@ class HeroCarouselCardPresenter(
         fun collapseLastExpanded() {
             lastExpandedHolder?.let { holder ->
                 holder.anim?.cancel()
+                holder.anim = null
+
+                // Stop any video playing on the pinned card
+                if (activeHolder === holder) {
+                    stopActiveVideo()
+                }
+
                 // Animate collapse back to poster/small size
                 val context = holder.rootView.context
                 val unselectedW = context.resources.getDimensionPixelSize(R.dimen.carousel_unselected_width)
@@ -112,11 +119,16 @@ class HeroCarouselCardPresenter(
                 holder.backdrop.alpha = 0f
                 holder.poster.alpha = 1f
                 holder.focusBorder.alpha = 0f
+                holder.focusBorder.visibility = View.GONE
+                holder.focusBorder.elevation = 0f
+                holder.focusBorder.translationZ = 0f
                 val lp = holder.cardContainer.layoutParams
                 lp.width = unselectedW
                 lp.height = unselectedH
                 if (lp is ViewGroup.MarginLayoutParams) lp.topMargin = unselectedTopMargin
                 holder.cardContainer.layoutParams = lp
+                holder.cardContainer.requestLayout()
+                holder.rootView.requestLayout()
             }
             lastExpandedHolder = null
         }
@@ -483,7 +495,10 @@ class HeroCarouselCardPresenter(
             holder.basicDetailsLayout.translationY = 0f
             holder.bgShadow.alpha = targetAlpha
             holder.bgShadow.visibility = if (hasFocus) View.VISIBLE else View.GONE
-            holder.focusBorder.alpha = targetAlpha
+            holder.focusBorder.elevation = if (hasFocus) 14f * density else 0f
+            holder.focusBorder.translationZ = if (hasFocus) 4f * density else 0f
+            holder.focusBorder.alpha = if (hasFocus) 1f else 0f
+            holder.focusBorder.visibility = if (hasFocus) View.VISIBLE else View.GONE
             holder.cardContainer.cardElevation = targetElevation
             return
         }
@@ -492,6 +507,16 @@ class HeroCarouselCardPresenter(
             holder.rootView.bringToFront()
             holder.basicDetailsLayout.visibility = View.VISIBLE
             holder.bgShadow.visibility = View.VISIBLE
+            holder.focusBorder.bringToFront()
+            holder.focusBorder.elevation = 14f * density
+            holder.focusBorder.translationZ = 4f * density
+            holder.focusBorder.alpha = 1f
+            holder.focusBorder.visibility = View.VISIBLE
+        } else {
+            holder.focusBorder.alpha = 0f
+            holder.focusBorder.visibility = View.GONE
+            holder.focusBorder.elevation = 0f
+            holder.focusBorder.translationZ = 0f
         }
 
         val startW = holder.cardContainer.layoutParams.width.takeIf { it > 0 } ?: if (hasFocus) unselectedW else selectedW
@@ -521,7 +546,6 @@ class HeroCarouselCardPresenter(
                 val currentDetailsAlpha = startDetailsAlpha + (targetAlpha - startDetailsAlpha) * f
                 holder.basicDetailsLayout.alpha = currentDetailsAlpha
                 holder.bgShadow.alpha = currentDetailsAlpha
-                holder.focusBorder.alpha = currentDetailsAlpha
 
                 if (hasFocus) {
                     holder.basicDetailsLayout.translationY = 16f * density * (1f - f)
@@ -554,7 +578,9 @@ class HeroCarouselCardPresenter(
         val gridView = listRowView.gridView
         val pos = gridView.getChildAdapterPosition(holder.rootView)
         if (pos != androidx.recyclerview.widget.RecyclerView.NO_POSITION && holder.rootView.hasFocus()) {
-            gridView.setSelectedPositionSmooth(pos)
+            if (gridView.selectedPosition != pos) {
+                gridView.setSelectedPositionSmooth(pos)
+            }
         }
     }
 
@@ -567,6 +593,8 @@ class HeroCarouselCardPresenter(
                 lp.topMargin = topMargin
             }
             holder.cardContainer.layoutParams = lp
+            holder.cardContainer.requestLayout()
+            holder.rootView.requestLayout()
         }
     }
 
@@ -635,6 +663,8 @@ class HeroCarouselCardPresenter(
 
                 // After focus settles, decide whether to collapse or keep expanded
                 holder.rootView.post {
+                    if (holder.rootView.hasFocus()) return@post
+
                     val focusedView = holder.rootView.rootView.findFocus()
                     val isStillInside = focusedView?.let { isViewInsideCarousel(it) } ?: false
 
@@ -680,7 +710,7 @@ class HeroCarouselCardPresenter(
                 return@post
             }
 
-            val autoRotateEnabled = railCommonData.screenWidget?.autoRotate == true
+            val autoRotateEnabled = keepExpandedWhenUnfocused && railCommonData.screenWidget?.autoRotate == true
             if (!autoRotateEnabled) {
                 HeroCarouselAutoSlideController.unregisterRow(rowId)
                 return@post
