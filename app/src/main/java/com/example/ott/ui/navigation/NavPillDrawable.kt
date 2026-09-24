@@ -70,9 +70,8 @@ class NavPillDrawable(context: Context) : Drawable() {
         val h = bounds.height().toFloat()
         if (w <= 0f || h <= 0f) return
 
-        // Effective gradient width: fades to 100% transparent well before the right edge
-        // (78% of width), guaranteeing it never spills over the curved navigation arch.
-        val gradWidth = (w * 0.78f).coerceAtLeast(40f * density)
+        val isCollapsed = w < (80f * density)
+        val gradWidth = if (isCollapsed) w else (w * 0.78f).coerceAtLeast(40f * density)
 
         // Fill gradient: Blue -> Gray -> Transparent
         fillPaint.shader = LinearGradient(
@@ -92,7 +91,7 @@ class NavPillDrawable(context: Context) : Drawable() {
             intArrayOf(
                 Color.parseColor("#CC60A5FA"), // Luminous Blue stroke
                 Color.parseColor("#4D94A3B8"), // Slate Gray stroke
-                Color.TRANSPARENT             // Transparent stroke (no right border!)
+                Color.TRANSPARENT             // Transparent stroke
             ),
             floatArrayOf(0f, 0.48f, 1f),
             Shader.TileMode.CLAMP

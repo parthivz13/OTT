@@ -53,7 +53,7 @@ class ExpandableHeroCarouselRowPresenter(
 
         // Both-edge alignment ensures focused expanding cards never cut off on either left or right boundary
         gridView.windowAlignment = BaseGridView.WINDOW_ALIGN_BOTH_EDGE
-        gridView.windowAlignmentOffset = (48 * density).toInt()
+        gridView.windowAlignmentOffset = (12 * density).toInt()
         gridView.windowAlignmentOffsetPercent = BaseGridView.WINDOW_ALIGN_OFFSET_PERCENT_DISABLED
         gridView.itemAlignmentOffsetPercent = 0f
         gridView.itemAlignmentOffset = 0
