@@ -114,7 +114,7 @@ class MainActivity : FragmentActivity() {
                     )
                 ),
                 SideNavView.SideNavItem("categories", getString(R.string.nav_categories), R.drawable.ic_nav_categories, tag = ScreenType.CATEGORIES),
-                SideNavView.SideNavItem("my_space", getString(R.string.nav_my_space), R.drawable.ic_nav_myspace_avatar, isBottomItem = true, tag = ScreenType.MY_SPACE)
+                SideNavView.SideNavItem("my_space", getString(R.string. nav_my_space), R.drawable.ic_nav_myspace_avatar, isBottomItem = true, tag = ScreenType.MY_SPACE)
             )
         )
 
@@ -246,8 +246,13 @@ class MainActivity : FragmentActivity() {
                 // If focus is in a horizontal rail and NOT at the first item (pos > 0),
                 // move left between cards within the row.
                 val rowInfo = findRowAdapterPosition(before)
-                if (rowInfo != null && rowInfo.position > 0) {
-                    return super.dispatchKeyEvent(event)
+                if (rowInfo != null) {
+                    if (rowInfo.position > 0) {
+                        return super.dispatchKeyEvent(event)
+                    }
+                    // At position 0: immediately escape to side nav on active item
+                    sideNavView.focusSelectedNavItem()
+                    return true
                 }
 
                 val handled = super.dispatchKeyEvent(event)
@@ -258,8 +263,7 @@ class MainActivity : FragmentActivity() {
                         // Focus entered side nav: guarantee it lands on the active selected tab
                         sideNavView.focusSelectedNavItem()
                         return true
-                    } else if (!handled || (rowInfo?.position == 0 && after === before)) {
-                        // Already at first item of the row and pressing left escapes to side nav
+                    } else if (!handled) {
                         sideNavView.focusSelectedNavItem()
                         return true
                     }

@@ -23,8 +23,9 @@ import com.example.ott.R
  * Self-contained, modular Side Navigation component designed for Android TV OTT applications,
  * faithfully replicating the JioHotstar navigation architecture with:
  * - Vertically centered menu items between top logo and bottom profile.
- * - Distinct fluid animations for when Home is active vs when an Inner Tab (TV, Movies, Sports) is active.
- * - Dynamic parent icon replacement when collapsed without icon-swap flicker during expansion.
+ * - Accurate focus retention on selected sub-items when expanding.
+ * - Distinct fluid animations for Home active vs Sub-item active states without icon replacement flicker.
+ * - Dynamic parent icon replacement in collapsed rail mode.
  * - Hierarchical parent/sub-item navigation structure.
  * - Signature curved arch backdrop ([NavArchView]).
  * - Glassmorphic pills with custom gradient fill and strokes ([NavPillDrawable]).
@@ -271,7 +272,7 @@ class SideNavView @JvmOverloads constructor(
             if (item.isSubItem && item.parentId != null) {
                 val parentHolder = itemViewsMap[item.parentId]
                 if (navExpanded) {
-                    // In expanded mode: Parent stays Home with Home icon; sub-item has indicator
+                    // In expanded mode: Parent stays Home with Home icon; sub-item has active indicator
                     parentHolder?.iconView?.setImageResource(parentHolder.originalIconRes)
                     parentHolder?.pillView?.isSelected = false
                     parentHolder?.indicatorView?.visibility = View.INVISIBLE
@@ -338,22 +339,31 @@ class SideNavView @JvmOverloads constructor(
     }
 
     /**
-     * Request focus on the active selected nav item (or parent if sub-item).
+     * Request focus on the active selected nav item (lands directly on sub-item if sub-item is active).
      */
     fun focusSelectedNavItem(): Boolean {
-        var target = selectedPillView
-        if (target != null && target.visibility == View.VISIBLE) {
-            return target.requestFocus()
-        }
+        // First expand navigation so sub-items become visible and immediately focusable!
+        openSideNav()
+
         val curItem = getSelectedItem()
-        if (curItem?.parentId != null) {
-            val parentHolder = itemViewsMap[curItem.parentId]
-            if (parentHolder?.pillView?.visibility == View.VISIBLE) {
-                return parentHolder.pillView.requestFocus()
-            }
+        val targetHolder = curItem?.id?.let { itemViewsMap[it] }
+        if (targetHolder != null && targetHolder.pillView.visibility == View.VISIBLE) {
+            return targetHolder.pillView.requestFocus()
         }
         val firstChild = centerItemsContainer.getChildAt(0)
         return firstChild?.requestFocus() ?: false
+    }
+
+    override fun onRequestFocusInDescendants(direction: Int, previouslyFocusedRect: android.graphics.Rect?): Boolean {
+        if (!navExpanded) {
+            openSideNav()
+        }
+        val curItem = getSelectedItem()
+        val targetHolder = curItem?.id?.let { itemViewsMap[it] }
+        if (targetHolder != null && targetHolder.pillView.visibility == View.VISIBLE) {
+            return targetHolder.pillView.requestFocus(direction, previouslyFocusedRect)
+        }
+        return super.onRequestFocusInDescendants(direction, previouslyFocusedRect)
     }
 
     /**
