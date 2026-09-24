@@ -57,6 +57,8 @@ class ExpandableHeroCarouselRowPresenter(
         gridView.windowAlignmentOffsetPercent = BaseGridView.WINDOW_ALIGN_OFFSET_PERCENT_DISABLED
         gridView.itemAlignmentOffsetPercent = 0f
         gridView.itemAlignmentOffset = 0
+        listRowHolder.view.setPadding(0, listRowHolder.view.paddingTop, listRowHolder.view.paddingRight, listRowHolder.view.paddingBottom)
+        gridView.setPadding(0, gridView.paddingTop, gridView.paddingRight, gridView.paddingBottom)
 
         var p = gridView.parent
         while (p is ViewGroup && p !is androidx.leanback.widget.VerticalGridView) {
