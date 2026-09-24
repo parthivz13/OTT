@@ -209,25 +209,7 @@ class HeroCarouselRowPresenter(
                     if (viewHolder.selectedIndex == 0) {
                         // Already at first position (pos 0): open side nav and focus selected item!
                         val success = com.example.ott.ui.browse.MainActivity.instance?.focusSelectedNavItem()
-                            ?: run {
-                                val root = viewHolder.card.rootView
-                                val navContainer = root.findViewById<ViewGroup>(R.id.nav_container)
-                                var selectedPill: View? = null
-                                if (navContainer != null) {
-                                    fun scan(v: View): View? {
-                                        if (v.isSelected && v.isFocusable) return v
-                                        if (v is ViewGroup) {
-                                            for (i in 0 until v.childCount) {
-                                                val found = scan(v.getChildAt(i))
-                                                if (found != null) return found
-                                            }
-                                        }
-                                        return null
-                                    }
-                                    selectedPill = scan(navContainer)
-                                }
-                                (selectedPill ?: root.findViewById<View>(R.id.nav_home))?.requestFocus() ?: false
-                            }
+                            ?: (viewHolder.card.rootView.findViewById<com.example.ott.ui.navigation.SideNavView>(R.id.side_nav_view)?.focusSelectedNavItem() ?: false)
                         success
                     } else {
                         // Not at first position (pos > 0): step backwards to the first position!
