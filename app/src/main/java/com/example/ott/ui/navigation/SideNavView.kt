@@ -23,7 +23,8 @@ import com.example.ott.R
  * Self-contained, modular Side Navigation component designed for Android TV OTT applications,
  * faithfully replicating the JioHotstar navigation architecture with:
  * - Vertically centered menu items between top logo and bottom profile.
- * - Dynamic parent icon replacement when a sub-item (e.g. TV, Movies, Sports) is active.
+ * - Distinct fluid animations for when Home is active vs when an Inner Tab (TV, Movies, Sports) is active.
+ * - Dynamic parent icon replacement when collapsed without icon-swap flicker during expansion.
  * - Hierarchical parent/sub-item navigation structure.
  * - Signature curved arch backdrop ([NavArchView]).
  * - Glassmorphic pills with custom gradient fill and strokes ([NavPillDrawable]).
@@ -244,12 +245,11 @@ class SideNavView @JvmOverloads constructor(
             setSelectedItemId(defaultItem.id, triggerCallback = false)
         }
 
-        updateSubItemsVisibility()
+        updateInitialState()
     }
 
     /**
-     * Set active selected item by ID. If a sub-item (e.g. TV, Movies, Sports) is selected,
-     * the parent root icon dynamically replaces to this sub-item's icon (JioHotstar behavior).
+     * Set active selected item by ID.
      */
     fun setSelectedItemId(id: String?, triggerCallback: Boolean = false) {
         selectedItemId = id
@@ -269,19 +269,21 @@ class SideNavView @JvmOverloads constructor(
 
             val item = targetHolder.item
             if (item.isSubItem && item.parentId != null) {
-                // Sub-item selected: replace parent root item's icon with this sub-item's icon!
                 val parentHolder = itemViewsMap[item.parentId]
-                if (parentHolder != null) {
-                    parentHolder.iconView.setImageResource(item.iconRes)
-                    parentHolder.pillView.isSelected = true
-                    parentHolder.pillView.invalidate()
-
-                    // In collapsed mode, parent shows active indicator; in expanded mode, sub-item shows it
-                    parentHolder.indicatorView.visibility = if (navExpanded) View.INVISIBLE else View.VISIBLE
-                    targetHolder.indicatorView.visibility = if (navExpanded) View.VISIBLE else View.INVISIBLE
-                } else {
+                if (navExpanded) {
+                    // In expanded mode: Parent stays Home with Home icon; sub-item has indicator
+                    parentHolder?.iconView?.setImageResource(parentHolder.originalIconRes)
+                    parentHolder?.pillView?.isSelected = false
+                    parentHolder?.indicatorView?.visibility = View.INVISIBLE
                     targetHolder.indicatorView.visibility = View.VISIBLE
+                } else {
+                    // In collapsed rail mode: Parent slot displays the selected sub-item's icon
+                    parentHolder?.iconView?.setImageResource(item.iconRes)
+                    parentHolder?.pillView?.isSelected = true
+                    parentHolder?.indicatorView?.visibility = View.VISIBLE
+                    targetHolder.indicatorView.visibility = View.INVISIBLE
                 }
+                parentHolder?.pillView?.invalidate()
             } else {
                 // Root item selected: restore original parent icon
                 targetHolder.iconView.setImageResource(targetHolder.originalIconRes)
@@ -336,7 +338,7 @@ class SideNavView @JvmOverloads constructor(
     }
 
     /**
-     * Request focus on the active selected nav item (or first focusable item).
+     * Request focus on the active selected nav item (or parent if sub-item).
      */
     fun focusSelectedNavItem(): Boolean {
         var target = selectedPillView
@@ -368,28 +370,25 @@ class SideNavView @JvmOverloads constructor(
     }
 
     /**
-     * Open (expand) the sidebar.
+     * Open (expand) the sidebar with distinct smooth animations depending on selection state.
      */
     fun openSideNav() {
         if (!navExpanded) {
             navExpanded = true
-            updateSubItemsVisibility()
-            updateIndicatorVisibility()
+            handleOpenAnimation()
             animateNavWidth(EXPANDED_WIDTH_DP)
-            animateAllLabels(true)
             onNavStateChangeListener?.invoke(true)
         }
     }
 
     /**
-     * Close (collapse) the sidebar.
+     * Close (collapse) the sidebar with smooth transitions.
      */
     fun closeSideNav() {
         if (navExpanded) {
             navExpanded = false
-            updateIndicatorVisibility()
+            handleCloseAnimation()
             animateNavWidth(COLLAPSED_WIDTH_DP)
-            animateAllLabels(false)
             onNavStateChangeListener?.invoke(false)
         }
     }
@@ -584,7 +583,7 @@ class SideNavView @JvmOverloads constructor(
         return ItemViewHolder(item, pill, indicator, iconView, labelView, item.iconRes)
     }
 
-    private fun updateSubItemsVisibility() {
+    private fun updateInitialState() {
         itemViewsMap.values.forEach { holder ->
             if (holder.item.isSubItem) {
                 holder.pillView.visibility = if (navExpanded) View.VISIBLE else View.GONE
@@ -592,17 +591,96 @@ class SideNavView @JvmOverloads constructor(
         }
     }
 
-    private fun updateIndicatorVisibility() {
-        val curItem = getSelectedItem() ?: return
-        if (curItem.isSubItem && curItem.parentId != null) {
-            val parentHolder = itemViewsMap[curItem.parentId]
-            val subHolder = itemViewsMap[curItem.id]
-            parentHolder?.indicatorView?.visibility = if (navExpanded) View.INVISIBLE else View.VISIBLE
-            subHolder?.indicatorView?.visibility = if (navExpanded) View.VISIBLE else View.INVISIBLE
+    /**
+     * Handles opening animation:
+     * - If Home is active: Staggered accordion slide-down & fade-in for sub-items.
+     * - If an Inner Item (TV, Movies, Sports) is active: Sub-items reveal directly at their respective rows
+     *   while Home immediately displays its Home icon/text with zero icon replacement flicker.
+     */
+    private fun handleOpenAnimation() {
+        val curItem = getSelectedItem()
+        val isSubItemSelected = curItem?.isSubItem == true
+
+        if (isSubItemSelected) {
+            // Case 2: Inner item selected (TV / Movies / Sports)
+            // 1. Immediately restore parent (Home) to original Home icon & normal state
+            val parentId = curItem?.parentId
+            if (parentId != null) {
+                val parentHolder = itemViewsMap[parentId]
+                parentHolder?.iconView?.setImageResource(parentHolder.originalIconRes)
+                parentHolder?.indicatorView?.visibility = View.INVISIBLE
+                parentHolder?.pillView?.isSelected = false
+                parentHolder?.pillView?.invalidate()
+            }
+
+            // 2. Reveal sub-items smoothly in-place
+            itemViewsMap.values.forEach { holder ->
+                if (holder.item.isSubItem) {
+                    holder.pillView.visibility = View.VISIBLE
+                    holder.pillView.translationY = 0f
+                    holder.pillView.alpha = 1f
+                }
+            }
+
+            // 3. Highlight the selected sub-item
+            val targetHolder = curItem?.id?.let { itemViewsMap[it] }
+            targetHolder?.pillView?.isSelected = true
+            targetHolder?.indicatorView?.visibility = View.VISIBLE
+            targetHolder?.pillView?.invalidate()
+
+            // 4. Reveal labels smoothly
+            animateAllLabels(true)
         } else {
-            val rootHolder = itemViewsMap[curItem.id]
-            rootHolder?.indicatorView?.visibility = View.VISIBLE
+            // Case 1: Home (or root item) selected
+            // 1. Restore root icons
+            itemViewsMap.values.filter { !it.item.isSubItem }.forEach { rootHolder ->
+                rootHolder.iconView.setImageResource(rootHolder.originalIconRes)
+            }
+
+            // 2. Cascade stagger animation for sub-items
+            var subIndex = 0
+            itemViewsMap.values.forEach { holder ->
+                if (holder.item.isSubItem) {
+                    holder.pillView.visibility = View.VISIBLE
+                    holder.pillView.translationY = -14f * density
+                    holder.pillView.alpha = 0f
+                    holder.pillView.animate().cancel()
+                    holder.pillView.animate()
+                        .translationY(0f)
+                        .alpha(1f)
+                        .setStartDelay(subIndex * 35L)
+                        .setDuration(200L)
+                        .setInterpolator(DecelerateInterpolator(1.6f))
+                        .start()
+                    subIndex++
+                }
+            }
+
+            // 3. Reveal labels smoothly
+            animateAllLabels(true)
         }
+    }
+
+    /**
+     * Handles closing animation:
+     * - Collapses sub-items and switches parent slot to display active sub-item icon in collapsed rail.
+     */
+    private fun handleCloseAnimation() {
+        val curItem = getSelectedItem()
+        val isSubItemSelected = curItem?.isSubItem == true
+
+        if (isSubItemSelected) {
+            val parentId = curItem?.parentId
+            if (parentId != null) {
+                val parentHolder = itemViewsMap[parentId]
+                parentHolder?.iconView?.setImageResource(curItem.iconRes)
+                parentHolder?.indicatorView?.visibility = View.VISIBLE
+                parentHolder?.pillView?.isSelected = true
+                parentHolder?.pillView?.invalidate()
+            }
+        }
+
+        animateAllLabels(false)
     }
 
     private fun findNextItemFocus(currentFocus: View, isUp: Boolean): View? {
@@ -668,8 +746,9 @@ class SideNavView @JvmOverloads constructor(
                     .setDuration(NAV_ANIM_DURATION)
                     .withEndAction {
                         label.visibility = View.GONE
-                        updateSubItemsVisibility()
-                        updateIndicatorVisibility()
+                        if (!navExpanded) {
+                            updateInitialState()
+                        }
                     }
                     .start()
             }
