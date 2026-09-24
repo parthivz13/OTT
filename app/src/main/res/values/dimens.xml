@@ -11,6 +11,6 @@
     <dimen name="lb_browse_rows_margin_start">0dp</dimen>
     <dimen name="lb_browse_padding_start">0dp</dimen>
     <dimen name="lb_browse_rows_fading_edge">0dp</dimen>
-    <dimen name="row_alignment_offset">12dp</dimen>
+    <dimen name="row_alignment_offset">17dp</dimen>
     <dimen name="row_alignment_offset1">24dp</dimen>
 </resources>

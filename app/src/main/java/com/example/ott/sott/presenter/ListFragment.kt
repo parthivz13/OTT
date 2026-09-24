@@ -99,7 +99,7 @@ class ListFragment : RowsSupportFragment() {
             val density = gridView.resources.displayMetrics.density
 
             gridView.windowAlignment = BaseGridView.WINDOW_ALIGN_BOTH_EDGE
-            gridView.windowAlignmentOffset = (12 * density).toInt()
+            gridView.windowAlignmentOffset = (17 * density).toInt()
             gridView.windowAlignmentOffsetPercent = BaseGridView.WINDOW_ALIGN_OFFSET_PERCENT_DISABLED
             gridView.itemAlignmentOffsetPercent = 0f
             gridView.itemAlignmentOffset = 0
@@ -114,7 +114,7 @@ class ListFragment : RowsSupportFragment() {
             val density = gridView.resources.displayMetrics.density
 
             gridView.windowAlignment = BaseGridView.WINDOW_ALIGN_BOTH_EDGE
-            gridView.windowAlignmentOffset = (12 * density).toInt()
+            gridView.windowAlignmentOffset = (17 * density).toInt()
             gridView.windowAlignmentOffsetPercent = BaseGridView.WINDOW_ALIGN_OFFSET_PERCENT_DISABLED
             gridView.itemAlignmentOffsetPercent = 0f
             gridView.itemAlignmentOffset = 0
