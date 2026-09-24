@@ -106,6 +106,21 @@ class ListFragment : RowsSupportFragment() {
             listRowHolder.view.setPadding(0, listRowHolder.view.paddingTop, listRowHolder.view.paddingRight, listRowHolder.view.paddingBottom)
             gridView.setPadding(0, gridView.paddingTop, gridView.paddingRight, gridView.paddingBottom)
         }
+
+        override fun onBindRowViewHolder(holder: RowPresenter.ViewHolder, item: Any) {
+            super.onBindRowViewHolder(holder, item)
+            val listRowHolder = holder as? ListRowPresenter.ViewHolder ?: return
+            val gridView = listRowHolder.gridView
+            val density = gridView.resources.displayMetrics.density
+
+            gridView.windowAlignment = BaseGridView.WINDOW_ALIGN_BOTH_EDGE
+            gridView.windowAlignmentOffset = (12 * density).toInt()
+            gridView.windowAlignmentOffsetPercent = BaseGridView.WINDOW_ALIGN_OFFSET_PERCENT_DISABLED
+            gridView.itemAlignmentOffsetPercent = 0f
+            gridView.itemAlignmentOffset = 0
+            listRowHolder.view.setPadding(0, listRowHolder.view.paddingTop, listRowHolder.view.paddingRight, listRowHolder.view.paddingBottom)
+            gridView.setPadding(0, gridView.paddingTop, gridView.paddingRight, gridView.paddingBottom)
+        }
     }.apply {
         shadowEnabled = false
         selectEffectEnabled = false
