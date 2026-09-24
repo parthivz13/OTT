@@ -602,18 +602,18 @@ class SideNavView @JvmOverloads constructor(
     }
 
     /**
-     * Handles opening animation:
-     * - If Home is active: Staggered accordion slide-down & fade-in for sub-items.
-     * - If an Inner Item (TV, Movies, Sports) is active: Sub-items reveal directly at their respective rows
-     *   while Home immediately displays its Home icon/text with zero icon replacement flicker.
+     * Handles opening animation — precisely matching JioHotstar behavior:
+     * - If Home is active: All root-item labels fade+slide in; sub-items cascade from top with staggered slide+fade.
+     * - If a Sub-Item (TV, Movies, Sports) is active: All items appear with a short fade-in (no cascade),
+     *   focus stays on the selected sub-item. Home reverts to original icon.
      */
     private fun handleOpenAnimation() {
         val curItem = getSelectedItem()
         val isSubItemSelected = curItem?.isSubItem == true
 
         if (isSubItemSelected) {
-            // Case 2: Inner item selected (TV / Movies / Sports)
-            // 1. Immediately restore parent (Home) to original Home icon & normal state
+            // Case 2: Sub-item active (e.g. TV / Movies / Sports)
+            // 1. Restore parent (Home) to original icon — no flicker
             val parentId = curItem?.parentId
             if (parentId != null) {
                 val parentHolder = itemViewsMap[parentId]
@@ -623,74 +623,103 @@ class SideNavView @JvmOverloads constructor(
                 parentHolder?.pillView?.invalidate()
             }
 
-            // 2. Reveal sub-items smoothly in-place
+            // 2. Make all sub-items visible but start translucent — JioHotstar fades them in quickly
             itemViewsMap.values.forEach { holder ->
                 if (holder.item.isSubItem) {
                     holder.pillView.visibility = View.VISIBLE
                     holder.pillView.translationY = 0f
-                    holder.pillView.alpha = 1f
+                    holder.pillView.alpha = 0f
+                    holder.pillView.animate().cancel()
+                    holder.pillView.animate()
+                        .alpha(1f)
+                        .setStartDelay(80L)   // slight delay until width is partially open
+                        .setDuration(140L)
+                        .start()
                 }
             }
 
-            // 3. Highlight the selected sub-item
+            // 3. Ensure selected sub-item indicator is shown
             val targetHolder = curItem?.id?.let { itemViewsMap[it] }
             targetHolder?.pillView?.isSelected = true
             targetHolder?.indicatorView?.visibility = View.VISIBLE
             targetHolder?.pillView?.invalidate()
 
-            // 4. Reveal labels smoothly
-            animateAllLabels(true)
+            // 4. Animate labels — slight slide-in from left
+            animateAllLabels(show = true, slideAmount = 6f, startDelay = 80L)
         } else {
-            // Case 1: Home (or root item) selected
-            // 1. Restore root icons
+            // Case 1: Home (or root item) active
+            // 1. Restore all root item icons to originals
             itemViewsMap.values.filter { !it.item.isSubItem }.forEach { rootHolder ->
                 rootHolder.iconView.setImageResource(rootHolder.originalIconRes)
             }
 
-            // 2. Cascade stagger animation for sub-items
+            // 2. Staggered cascade for sub-items — slide from slightly above with fade (JioHotstar style)
             var subIndex = 0
             itemViewsMap.values.forEach { holder ->
                 if (holder.item.isSubItem) {
                     holder.pillView.visibility = View.VISIBLE
-                    holder.pillView.translationY = -14f * density
+                    holder.pillView.translationY = -(10f * density)
                     holder.pillView.alpha = 0f
                     holder.pillView.animate().cancel()
                     holder.pillView.animate()
                         .translationY(0f)
                         .alpha(1f)
-                        .setStartDelay(subIndex * 35L)
-                        .setDuration(200L)
-                        .setInterpolator(DecelerateInterpolator(1.6f))
+                        .setStartDelay(60L + subIndex * 40L)
+                        .setDuration(220L)
+                        .setInterpolator(DecelerateInterpolator(2.0f))
                         .start()
                     subIndex++
                 }
             }
 
-            // 3. Reveal labels smoothly
-            animateAllLabels(true)
+            // 3. Animate labels — slide in from left slightly (JioHotstar labels slide subtly)
+            animateAllLabels(show = true, slideAmount = 6f, startDelay = 40L)
         }
     }
 
     /**
-     * Handles closing animation:
-     * - Collapses sub-items and switches parent slot to display active sub-item icon in collapsed rail.
+     * Handles closing animation — matching JioHotstar:
+     * - Labels fade out (with slight slide-back) and sub-item pills fade out simultaneously.
+     * - After fade, parent slot updates to show active sub-item icon for collapsed rail.
      */
     private fun handleCloseAnimation() {
         val curItem = getSelectedItem()
         val isSubItemSelected = curItem?.isSubItem == true
 
+        // Fade out sub-item pills immediately as menu starts collapsing
+        itemViewsMap.values.forEach { holder ->
+            if (holder.item.isSubItem) {
+                holder.pillView.animate().cancel()
+                holder.pillView.animate()
+                    .alpha(0f)
+                    .setDuration(120L)
+                    .withEndAction {
+                        holder.pillView.visibility = View.GONE
+                        holder.pillView.alpha = 1f  // Reset for next open
+                        if (isSubItemSelected && holder.item.id == curItem?.id) {
+                            // Ensure indicator hidden while collapsed
+                            holder.indicatorView.visibility = View.INVISIBLE
+                        }
+                    }
+                    .start()
+            }
+        }
+
         if (isSubItemSelected) {
             val parentId = curItem?.parentId
             if (parentId != null) {
                 val parentHolder = itemViewsMap[parentId]
-                parentHolder?.iconView?.setImageResource(curItem.iconRes)
-                parentHolder?.indicatorView?.visibility = View.VISIBLE
-                parentHolder?.pillView?.isSelected = true
-                parentHolder?.pillView?.invalidate()
+                // After a slight delay (fade done), switch parent icon to sub-item icon
+                parentHolder?.pillView?.postDelayed({
+                    parentHolder.iconView.setImageResource(curItem.iconRes)
+                    parentHolder.indicatorView.visibility = View.VISIBLE
+                    parentHolder.pillView.isSelected = true
+                    parentHolder.pillView.invalidate()
+                }, 100L)
             }
         }
 
-        animateAllLabels(false)
+        animateAllLabels(show = false)
     }
 
     private fun findNextItemFocus(currentFocus: View, isUp: Boolean): View? {
@@ -737,25 +766,30 @@ class SideNavView @JvmOverloads constructor(
         return false
     }
 
-    private fun animateAllLabels(show: Boolean) {
+    private fun animateAllLabels(show: Boolean, slideAmount: Float = 6f, startDelay: Long = 0L) {
         itemViewsMap.values.forEach { holder ->
             val label = holder.labelView
             label.animate().cancel()
             if (show) {
                 label.visibility = View.VISIBLE
-                label.translationX = -12f
+                label.translationX = -slideAmount
+                label.alpha = 0f
                 label.animate()
                     .alpha(1f)
                     .translationX(0f)
-                    .setDuration(NAV_ANIM_DURATION)
+                    .setStartDelay(startDelay)
+                    .setDuration(180L)
+                    .setInterpolator(DecelerateInterpolator(1.5f))
                     .start()
             } else {
                 label.animate()
                     .alpha(0f)
-                    .translationX(-8f)
-                    .setDuration(NAV_ANIM_DURATION)
+                    .translationX(-slideAmount)
+                    .setStartDelay(0L)
+                    .setDuration(120L)
                     .withEndAction {
                         label.visibility = View.GONE
+                        label.translationX = 0f
                         if (!navExpanded) {
                             updateInitialState()
                         }
@@ -769,9 +803,11 @@ class SideNavView @JvmOverloads constructor(
         widthAnimator?.cancel()
         val startPx = width.takeIf { it > 0 } ?: (COLLAPSED_WIDTH_DP * density).toInt()
         val endPx = (targetDp * density).toInt()
+        val isExpanding = endPx > startPx
         widthAnimator = ValueAnimator.ofInt(startPx, endPx).apply {
-            duration = NAV_ANIM_DURATION
-            interpolator = DecelerateInterpolator(1.8f)
+            // JioHotstar: expand is ~200ms snappy, collapse is ~180ms slightly faster
+            duration = if (isExpanding) 210L else 180L
+            interpolator = if (isExpanding) DecelerateInterpolator(2.2f) else DecelerateInterpolator(2.0f)
             addUpdateListener { anim ->
                 layoutParams = layoutParams.apply {
                     width = anim.animatedValue as Int
