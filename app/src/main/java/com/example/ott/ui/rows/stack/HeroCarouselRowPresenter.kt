@@ -204,11 +204,46 @@ class HeroCarouselRowPresenter(
                 }
                 KeyEvent.KEYCODE_DPAD_LEFT -> {
                     if (viewHolder.selectedIndex == 0) {
-                        val nextFocus = viewHolder.card.focusSearch(View.FOCUS_LEFT)
-                        if (nextFocus != null && nextFocus !== viewHolder.card) {
-                            nextFocus.requestFocus()
+                        var activity: com.example.ott.ui.browse.MainActivity? = null
+                        var ctx: android.content.Context? = viewHolder.card.context
+                        while (ctx is android.content.ContextWrapper) {
+                            if (ctx is com.example.ott.ui.browse.MainActivity) {
+                                activity = ctx
+                                break
+                            }
+                            ctx = ctx.baseContext
+                        }
+                        if (activity == null) {
+                            ctx = viewHolder.card.rootView.context
+                            while (ctx is android.content.ContextWrapper) {
+                                if (ctx is com.example.ott.ui.browse.MainActivity) {
+                                    activity = ctx
+                                    break
+                                }
+                                ctx = ctx.baseContext
+                            }
+                        }
+                        if (activity != null) {
+                            activity.focusSelectedNavItem()
                         } else {
-                            viewHolder.card.rootView.findViewById<View>(R.id.nav_home)?.requestFocus()
+                            // Find active selected tab in root view hierarchy
+                            val root = viewHolder.card.rootView
+                            val navContainer = root.findViewById<ViewGroup>(R.id.nav_container)
+                            var selectedPill: View? = null
+                            if (navContainer != null) {
+                                fun scan(v: View): View? {
+                                    if (v.isSelected && v.isFocusable) return v
+                                    if (v is ViewGroup) {
+                                        for (i in 0 until v.childCount) {
+                                            val found = scan(v.getChildAt(i))
+                                            if (found != null) return found
+                                        }
+                                    }
+                                    return null
+                                }
+                                selectedPill = scan(navContainer)
+                            }
+                            (selectedPill ?: root.findViewById<View>(R.id.nav_home))?.requestFocus()
                         }
                         true
                     } else {

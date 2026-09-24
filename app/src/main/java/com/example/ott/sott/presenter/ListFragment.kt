@@ -52,8 +52,14 @@ import com.example.ott.sott.utils.constants.AppConstants
 import com.example.ott.ui.browse.MainActivity
 
 enum class ScreenType {
+    CONNECT_PHONE,
+    SEARCH,
     HOME,
-    MOVIES
+    TV,
+    MOVIES,
+    SPORTS,
+    CATEGORIES,
+    MY_SPACE
 }
 
 class ListFragment : RowsSupportFragment() {
@@ -164,6 +170,9 @@ class ListFragment : RowsSupportFragment() {
         when (screenType) {
             ScreenType.HOME -> loadHomeScreenRails()
             ScreenType.MOVIES -> loadMovieScreenRails()
+            ScreenType.TV, ScreenType.SPORTS, ScreenType.CATEGORIES, ScreenType.MY_SPACE, ScreenType.SEARCH, ScreenType.CONNECT_PHONE -> {
+                loadHomeScreenRails()
+            }
         }
     }
 
