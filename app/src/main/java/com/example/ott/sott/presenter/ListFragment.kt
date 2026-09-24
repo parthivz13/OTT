@@ -166,12 +166,14 @@ class ListFragment : RowsSupportFragment() {
         setOnItemViewClickedListener(ItemViewClickListener())
 
         val alignmentPx = resources.getDimensionPixelSize(R.dimen.row_alignment_offset)
+        val density = resources.displayMetrics.density
         verticalGridView?.apply {
             windowAlignment = BaseGridView.WINDOW_ALIGN_BOTH_EDGE
             windowAlignmentOffsetPercent = BaseGridView.WINDOW_ALIGN_OFFSET_PERCENT_DISABLED
             windowAlignmentOffset = alignmentPx
             itemAlignmentOffset = 0
             itemAlignmentOffsetPercent = 0f
+            setItemSpacing((8 * density).toInt())
         }
 
         setupInstantVerticalNavigation()

@@ -3,8 +3,8 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/top10_card_root"
-    android:layout_width="195dp"
-    android:layout_height="240dp"
+    android:layout_width="185dp"
+    android:layout_height="200dp"
     android:layout_marginEnd="16dp"
     android:clipChildren="false"
     android:clipToPadding="false"
@@ -14,10 +14,10 @@
     <!-- 1. Giant Netflix-style 3D Outlined Rank Number -->
     <com.example.ott.ui.rows.top10.RankNumberView
         android:id="@+id/top10_rank_number"
-        android:layout_width="90dp"
+        android:layout_width="85dp"
         android:layout_height="190dp"
         android:layout_gravity="bottom|start"
-        android:layout_marginStart="4dp" />
+        android:layout_marginStart="0dp" />
 
     <!-- 2. Overlapping Portrait Poster Card -->
     <androidx.cardview.widget.CardView
