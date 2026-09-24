@@ -194,6 +194,9 @@ class HeroCarouselRowPresenter(
             setupSlots(viewHolder)
         }
 
+        // Tag hero_card with live position provider so MainActivity can verify carousel position
+        viewHolder.card.setTag(R.id.hero_card, { viewHolder.selectedIndex })
+
         // D-Pad Remote Navigation
         viewHolder.focusBorder.alpha = if (viewHolder.selectedIndex == 0) 1f else 0f
         viewHolder.card.setOnKeyListener { _, keyCode, event ->
@@ -204,49 +207,30 @@ class HeroCarouselRowPresenter(
                 }
                 KeyEvent.KEYCODE_DPAD_LEFT -> {
                     if (viewHolder.selectedIndex == 0) {
-                        var activity: com.example.ott.ui.browse.MainActivity? = null
-                        var ctx: android.content.Context? = viewHolder.card.context
-                        while (ctx is android.content.ContextWrapper) {
-                            if (ctx is com.example.ott.ui.browse.MainActivity) {
-                                activity = ctx
-                                break
-                            }
-                            ctx = ctx.baseContext
-                        }
-                        if (activity == null) {
-                            ctx = viewHolder.card.rootView.context
-                            while (ctx is android.content.ContextWrapper) {
-                                if (ctx is com.example.ott.ui.browse.MainActivity) {
-                                    activity = ctx
-                                    break
-                                }
-                                ctx = ctx.baseContext
-                            }
-                        }
-                        if (activity != null) {
-                            activity.focusSelectedNavItem()
-                        } else {
-                            // Find active selected tab in root view hierarchy
-                            val root = viewHolder.card.rootView
-                            val navContainer = root.findViewById<ViewGroup>(R.id.nav_container)
-                            var selectedPill: View? = null
-                            if (navContainer != null) {
-                                fun scan(v: View): View? {
-                                    if (v.isSelected && v.isFocusable) return v
-                                    if (v is ViewGroup) {
-                                        for (i in 0 until v.childCount) {
-                                            val found = scan(v.getChildAt(i))
-                                            if (found != null) return found
+                        // Already at first position (pos 0): open side nav and focus selected item!
+                        val success = com.example.ott.ui.browse.MainActivity.instance?.focusSelectedNavItem()
+                            ?: run {
+                                val root = viewHolder.card.rootView
+                                val navContainer = root.findViewById<ViewGroup>(R.id.nav_container)
+                                var selectedPill: View? = null
+                                if (navContainer != null) {
+                                    fun scan(v: View): View? {
+                                        if (v.isSelected && v.isFocusable) return v
+                                        if (v is ViewGroup) {
+                                            for (i in 0 until v.childCount) {
+                                                val found = scan(v.getChildAt(i))
+                                                if (found != null) return found
+                                            }
                                         }
+                                        return null
                                     }
-                                    return null
+                                    selectedPill = scan(navContainer)
                                 }
-                                selectedPill = scan(navContainer)
+                                (selectedPill ?: root.findViewById<View>(R.id.nav_home))?.requestFocus() ?: false
                             }
-                            (selectedPill ?: root.findViewById<View>(R.id.nav_home))?.requestFocus()
-                        }
-                        true
+                        success
                     } else {
+                        // Not at first position (pos > 0): step backwards to the first position!
                         tryAdvance(viewHolder, -1)
                         true
                     }

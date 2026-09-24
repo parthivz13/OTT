@@ -91,6 +91,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        instance = this
         BackgroundManager.getInstance(this).attach(window)
         setContentView(R.layout.activity_main)
 
@@ -104,9 +105,60 @@ class MainActivity : FragmentActivity() {
         setUpSideNav()
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        if (instance === this) {
+            instance = null
+        }
+    }
+
     fun focusSelectedNavItem(): Boolean {
         val target = selectedNavPill ?: findViewById<View>(R.id.nav_home)
         return target?.requestFocus() ?: false
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun getCarouselPosition(view: View?): Int? {
+        if (view == null) return null
+        val provider = view.getTag(R.id.hero_card) as? (() -> Int)
+        if (provider != null) return provider.invoke()
+        if (view.id == R.id.hero_card) {
+            val p = view.getTag(R.id.hero_card) as? (() -> Int)
+            return p?.invoke() ?: 0
+        }
+        var parent = view.parent
+        while (parent != null) {
+            if (parent is View && parent.id == R.id.hero_card) {
+                val p = parent.getTag(R.id.hero_card) as? (() -> Int)
+                return p?.invoke() ?: 0
+            }
+            parent = (parent as? View)?.parent
+        }
+        return null
+    }
+
+    private data class RowFocusInfo(val recyclerView: androidx.recyclerview.widget.RecyclerView, val position: Int)
+
+    private fun findRowAdapterPosition(view: View?): RowFocusInfo? {
+        if (view == null) return null
+        var current: View? = view
+        var parent = current?.parent
+        while (parent != null) {
+            if (parent is androidx.recyclerview.widget.RecyclerView) {
+                // Ignore the vertical grid view that hosts entire rows
+                if (parent is androidx.leanback.widget.VerticalGridView) {
+                    return null
+                }
+                val child = current ?: return null
+                val pos = parent.getChildAdapterPosition(child)
+                if (pos != androidx.recyclerview.widget.RecyclerView.NO_POSITION) {
+                    return RowFocusInfo(parent, pos)
+                }
+            }
+            current = parent as? View
+            parent = current?.parent
+        }
+        return null
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -114,40 +166,49 @@ class MainActivity : FragmentActivity() {
             if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
                 val before = currentFocus
 
-                // 1. Proactive check: If spatial focus would jump into the side navigation,
-                // redirect immediately to the active selected nav item!
-                if (before != null && !isNavDescendant(before)) {
-                    val next = android.view.FocusFinder.getInstance().findNextFocus(
-                        window.decorView as android.view.ViewGroup,
-                        before,
-                        View.FOCUS_LEFT
-                    )
-                    if (next != null && isNavDescendant(next)) {
-                        focusSelectedNavItem()
-                        return true
+                // Check if focus is already inside the side nav
+                if (before != null && isNavDescendant(before)) {
+                    return super.dispatchKeyEvent(event)
+                }
+
+                // 1. CAROUSEL CHECK:
+                // Check carousel position first! If carousel is not at first position (pos > 0),
+                // it MUST step backwards to the first position before opening the side nav!
+                val carouselPos = getCarouselPosition(before)
+                if (carouselPos != null) {
+                    if (carouselPos > 0) {
+                        // Carousel is at position > 0: let it advance backwards to position 0
+                        return super.dispatchKeyEvent(event)
                     }
+                    // Carousel is ALREADY at first position (pos == 0):
+                    // Pressing left now opens the side nav!
+                    focusSelectedNavItem()
+                    return true
+                }
+
+                // 2. RECYCLERVIEW / ROW CHECK:
+                // If focus is in a horizontal rail and NOT at the first item (pos > 0),
+                // move left between cards within the row.
+                val rowInfo = findRowAdapterPosition(before)
+                if (rowInfo != null && rowInfo.position > 0) {
+                    return super.dispatchKeyEvent(event)
                 }
 
                 val handled = super.dispatchKeyEvent(event)
                 val after = currentFocus
 
-                // 2. Reactive correction: If framework focus or presenter moved focus into side nav,
-                // guarantee it is on the active selected nav tab (never random tab).
                 if (before != null && !isNavDescendant(before)) {
                     if (after != null && isNavDescendant(after)) {
+                        // Focus entered side nav: guarantee it lands on the active selected tab
                         val target = selectedNavPill ?: findViewById<View>(R.id.nav_home)
                         if (target != null && after !== target) {
                             target.requestFocus()
                         }
                         return true
-                    } else if (!handled || after === before) {
-                        // 3. Fallback: If unhandled OR focus remained on before (already at first item of the row),
-                        // safely open the side nav and focus the selected nav tab from everywhere in the app!
-                        before.post {
-                            if (currentFocus === before) {
-                                focusSelectedNavItem()
-                            }
-                        }
+                    } else if (!handled || (rowInfo?.position == 0 && after === before)) {
+                        // Already at first item of the row and pressing left escapes to side nav
+                        focusSelectedNavItem()
+                        return true
                     }
                 }
                 return handled
@@ -333,5 +394,8 @@ class MainActivity : FragmentActivity() {
         private const val COLLAPSED_WIDTH_DP = 68
         private const val EXPANDED_WIDTH_DP = 226
         private const val NAV_ANIM_DURATION = 200L
+
+        var instance: MainActivity? = null
+            private set
     }
 }
