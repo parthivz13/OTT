@@ -97,15 +97,22 @@ class MainActivity : FragmentActivity() {
         // 1. Direct function to set top side brand image
         sideNavView.setTopImage(R.drawable.ic_brand_spark)
 
-        // 2. Configure navigation items
+        // 2. Configure navigation items with nested sub-items matching JioHotstar
         sideNavView.setItems(
             listOf(
                 SideNavView.SideNavItem("connect_phone", getString(R.string.nav_connect_phone), R.drawable.ic_nav_connect_phone, tag = ScreenType.CONNECT_PHONE),
                 SideNavView.SideNavItem("search", getString(R.string.nav_search), R.drawable.ic_nav_search, tag = ScreenType.SEARCH),
-                SideNavView.SideNavItem("home", getString(R.string.nav_home), R.drawable.ic_nav_home, tag = ScreenType.HOME),
-                SideNavView.SideNavItem("tv", getString(R.string.nav_tv), R.drawable.ic_nav_tv, tag = ScreenType.TV),
-                SideNavView.SideNavItem("movies", getString(R.string.nav_movies), R.drawable.ic_nav_movies, tag = ScreenType.MOVIES),
-                SideNavView.SideNavItem("sports", getString(R.string.nav_sports), R.drawable.ic_nav_sports, tag = ScreenType.SPORTS),
+                SideNavView.SideNavItem(
+                    id = "home",
+                    title = getString(R.string.nav_home),
+                    iconRes = R.drawable.ic_nav_home,
+                    tag = ScreenType.HOME,
+                    subItems = listOf(
+                        SideNavView.SideNavItem("tv", getString(R.string.nav_tv), R.drawable.ic_nav_tv, tag = ScreenType.TV),
+                        SideNavView.SideNavItem("movies", getString(R.string.nav_movies), R.drawable.ic_nav_movies, tag = ScreenType.MOVIES),
+                        SideNavView.SideNavItem("sports", getString(R.string.nav_sports), R.drawable.ic_nav_sports, tag = ScreenType.SPORTS)
+                    )
+                ),
                 SideNavView.SideNavItem("categories", getString(R.string.nav_categories), R.drawable.ic_nav_categories, tag = ScreenType.CATEGORIES),
                 SideNavView.SideNavItem("my_space", getString(R.string.nav_my_space), R.drawable.ic_nav_myspace_avatar, isBottomItem = true, tag = ScreenType.MY_SPACE)
             )
