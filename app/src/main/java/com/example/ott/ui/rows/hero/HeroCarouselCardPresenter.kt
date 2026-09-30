@@ -86,6 +86,7 @@ class HeroCarouselCardPresenter(
                 val unselectedW = context.resources.getDimensionPixelSize(R.dimen.carousel_unselected_width)
                 val unselectedH = context.resources.getDimensionPixelSize(R.dimen.carousel_unselected_height)
                 val unselectedTopMargin = context.resources.getDimensionPixelSize(R.dimen.hero_carousel_unfocused_top_margin)
+                holder.resetTrailerStateImmediate()
                 holder.basicDetailsLayout.visibility = View.GONE
                 holder.bgShadow.visibility = View.GONE
                 holder.backdrop.alpha = 0f
@@ -140,7 +141,7 @@ class HeroCarouselCardPresenter(
         var boundItem: Any? = null
         var anim: ValueAnimator? = null
         private val TRAILER_ANIM_DURATION = 300L
-        private val TITLE_TRAILER_TRANSLATION_DP = 36f
+        val TITLE_TRAILER_TRANSLATION_DP = 36f
         fun revertToPoster() {
             playerView.animate().cancel()
             playerView.player = null
@@ -149,7 +150,7 @@ class HeroCarouselCardPresenter(
             poster.visibility = View.VISIBLE
             backdrop.visibility = View.VISIBLE
             muteIcon.visibility = View.GONE
-            exitTrailerMode()
+            resetTrailerStateImmediate()
         }
         fun enterTrailerMode() {
             val density = rootView.context.resources.displayMetrics.density
@@ -185,37 +186,21 @@ class HeroCarouselCardPresenter(
                 .withEndAction { trendingBadge.visibility = View.INVISIBLE }
                 .start()
         }
-        fun exitTrailerMode() {
+        fun resetTrailerStateImmediate() {
             title.animate().cancel()
             metadataLayout.animate().cancel()
             description.animate().cancel()
             buttonsLayout.animate().cancel()
             trendingBadge.animate().cancel()
-            title.animate()
-                .translationY(0f)
-                .setDuration(TRAILER_ANIM_DURATION)
-                .setInterpolator(android.view.animation.DecelerateInterpolator(1.8f))
-                .start()
+            title.translationY = 0f
             metadataLayout.visibility = View.VISIBLE
-            metadataLayout.animate()
-                .alpha(1f)
-                .setDuration(TRAILER_ANIM_DURATION)
-                .start()
+            metadataLayout.alpha = 1f
             description.visibility = View.VISIBLE
-            description.animate()
-                .alpha(1f)
-                .setDuration(TRAILER_ANIM_DURATION)
-                .start()
+            description.alpha = 1f
             buttonsLayout.visibility = View.VISIBLE
-            buttonsLayout.animate()
-                .alpha(1f)
-                .setDuration(TRAILER_ANIM_DURATION)
-                .start()
+            buttonsLayout.alpha = 1f
             trendingBadge.visibility = View.VISIBLE
-            trendingBadge.animate()
-                .alpha(1f)
-                .setDuration(TRAILER_ANIM_DURATION)
-                .start()
+            trendingBadge.alpha = 1f
         }
         fun startAutoplayIfEligible() {
             val url = trailerUrl
@@ -456,6 +441,12 @@ class HeroCarouselCardPresenter(
             holder.basicDetailsLayout.alpha = targetAlpha
             holder.basicDetailsLayout.visibility = if (hasFocus) View.VISIBLE else View.GONE
             holder.basicDetailsLayout.translationY = 0f
+            holder.title.translationY = 0f
+            holder.metadataLayout.visibility = View.VISIBLE
+            holder.metadataLayout.alpha = 1f
+            holder.description.alpha = 1f
+            holder.buttonsLayout.visibility = View.VISIBLE
+            holder.buttonsLayout.alpha = 1f
             holder.bgShadow.alpha = targetAlpha
             holder.bgShadow.visibility = if (hasFocus) View.VISIBLE else View.GONE
             holder.focusBorder.elevation = if (hasFocus) 14f * density else 0f
@@ -474,7 +465,43 @@ class HeroCarouselCardPresenter(
             holder.focusBorder.translationZ = 4f * density
             holder.focusBorder.alpha = 1f
             holder.focusBorder.visibility = View.VISIBLE
+            holder.title.animate().cancel()
+            holder.title.translationY = holder.TITLE_TRAILER_TRANSLATION_DP * density
+            holder.metadataLayout.animate().cancel()
+            holder.metadataLayout.visibility = View.VISIBLE
+            holder.metadataLayout.alpha = 0f
+            holder.description.animate().cancel()
+            holder.description.visibility = View.VISIBLE
+            holder.description.alpha = 0f
+            holder.buttonsLayout.animate().cancel()
+            holder.buttonsLayout.visibility = View.VISIBLE
+            holder.buttonsLayout.alpha = 0f
+            holder.trendingBadge.animate().cancel()
+            holder.trendingBadge.alpha = 0f
+            holder.title.animate()
+                .translationY(0f)
+                .setDuration(EXPAND_COLLAPSE_DURATION_MS)
+                .setInterpolator(DecelerateInterpolator(1.8f))
+                .start()
+            holder.metadataLayout.animate()
+                .alpha(1f)
+                .setDuration(EXPAND_COLLAPSE_DURATION_MS)
+                .start()
+            holder.description.animate()
+                .alpha(1f)
+                .setDuration(EXPAND_COLLAPSE_DURATION_MS)
+                .start()
+            holder.buttonsLayout.animate()
+                .alpha(1f)
+                .setDuration(EXPAND_COLLAPSE_DURATION_MS)
+                .start()
+            holder.trendingBadge.animate()
+                .alpha(1f)
+                .setDuration(EXPAND_COLLAPSE_DURATION_MS)
+                .start()
         } else {
+            holder.title.animate().cancel()
+            holder.title.translationY = 0f
             holder.focusBorder.alpha = 0f
             holder.focusBorder.visibility = View.GONE
             holder.focusBorder.elevation = 0f
