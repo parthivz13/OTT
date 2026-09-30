@@ -1,4 +1,4 @@
-﻿package com.example.ott.ui.rows.hero
+package com.example.ott.ui.rows.hero
 import android.animation.ValueAnimator
 import android.content.Context
 import android.os.Handler
@@ -124,6 +124,7 @@ class HeroCarouselCardPresenter(
         val muteIcon: ImageView = rootView.findViewById(R.id.iv_hero_carousel_mute)
         val basicDetailsLayout: View = rootView.findViewById(R.id.layout_hero_content)
         val metadataLayout: View = rootView.findViewById(R.id.layout_hero_metadata)
+        val buttonsLayout: View = rootView.findViewById(R.id.layout_hero_buttons)
         val metadata: TextView = rootView.findViewById(R.id.tv_hero_metadata)
         val duration: TextView = rootView.findViewById(R.id.tv_hero_duration)
         val adBadge: TextView = rootView.findViewById(R.id.tv_hero_ad)
@@ -138,6 +139,8 @@ class HeroCarouselCardPresenter(
         var trailerUrl: String? = null
         var boundItem: Any? = null
         var anim: ValueAnimator? = null
+        private val TRAILER_ANIM_DURATION = 300L
+        private val TITLE_TRAILER_TRANSLATION_DP = 36f
         fun revertToPoster() {
             playerView.animate().cancel()
             playerView.player = null
@@ -146,6 +149,73 @@ class HeroCarouselCardPresenter(
             poster.visibility = View.VISIBLE
             backdrop.visibility = View.VISIBLE
             muteIcon.visibility = View.GONE
+            exitTrailerMode()
+        }
+        fun enterTrailerMode() {
+            val density = rootView.context.resources.displayMetrics.density
+            val translationY = TITLE_TRAILER_TRANSLATION_DP * density
+            title.animate().cancel()
+            metadataLayout.animate().cancel()
+            description.animate().cancel()
+            buttonsLayout.animate().cancel()
+            trendingBadge.animate().cancel()
+            title.animate()
+                .translationY(translationY)
+                .setDuration(TRAILER_ANIM_DURATION)
+                .setInterpolator(android.view.animation.DecelerateInterpolator(1.8f))
+                .start()
+            metadataLayout.animate()
+                .alpha(0f)
+                .setDuration(TRAILER_ANIM_DURATION)
+                .withEndAction { metadataLayout.visibility = View.INVISIBLE }
+                .start()
+            description.animate()
+                .alpha(0f)
+                .setDuration(TRAILER_ANIM_DURATION)
+                .withEndAction { description.visibility = View.INVISIBLE }
+                .start()
+            buttonsLayout.animate()
+                .alpha(0f)
+                .setDuration(TRAILER_ANIM_DURATION)
+                .withEndAction { buttonsLayout.visibility = View.INVISIBLE }
+                .start()
+            trendingBadge.animate()
+                .alpha(0f)
+                .setDuration(TRAILER_ANIM_DURATION)
+                .withEndAction { trendingBadge.visibility = View.INVISIBLE }
+                .start()
+        }
+        fun exitTrailerMode() {
+            title.animate().cancel()
+            metadataLayout.animate().cancel()
+            description.animate().cancel()
+            buttonsLayout.animate().cancel()
+            trendingBadge.animate().cancel()
+            title.animate()
+                .translationY(0f)
+                .setDuration(TRAILER_ANIM_DURATION)
+                .setInterpolator(android.view.animation.DecelerateInterpolator(1.8f))
+                .start()
+            metadataLayout.visibility = View.VISIBLE
+            metadataLayout.animate()
+                .alpha(1f)
+                .setDuration(TRAILER_ANIM_DURATION)
+                .start()
+            description.visibility = View.VISIBLE
+            description.animate()
+                .alpha(1f)
+                .setDuration(TRAILER_ANIM_DURATION)
+                .start()
+            buttonsLayout.visibility = View.VISIBLE
+            buttonsLayout.animate()
+                .alpha(1f)
+                .setDuration(TRAILER_ANIM_DURATION)
+                .start()
+            trendingBadge.visibility = View.VISIBLE
+            trendingBadge.animate()
+                .alpha(1f)
+                .setDuration(TRAILER_ANIM_DURATION)
+                .start()
         }
         fun startAutoplayIfEligible() {
             val url = trailerUrl
@@ -175,6 +245,7 @@ class HeroCarouselCardPresenter(
                         poster.visibility = View.INVISIBLE
                         backdrop.visibility = View.INVISIBLE
                         muteIcon.visibility = View.VISIBLE
+                        enterTrailerMode()
                     }
                 }
                 .start()
