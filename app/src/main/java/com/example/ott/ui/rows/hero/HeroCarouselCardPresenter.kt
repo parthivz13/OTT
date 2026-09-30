@@ -141,7 +141,6 @@ class HeroCarouselCardPresenter(
         var boundItem: Any? = null
         var anim: ValueAnimator? = null
         private val TRAILER_ANIM_DURATION = 300L
-        val TITLE_TRAILER_TRANSLATION_DP = 36f
         fun revertToPoster() {
             playerView.animate().cancel()
             playerView.player = null
@@ -154,17 +153,12 @@ class HeroCarouselCardPresenter(
         }
         fun enterTrailerMode() {
             val density = rootView.context.resources.displayMetrics.density
-            val translationY = TITLE_TRAILER_TRANSLATION_DP * density
             title.animate().cancel()
             metadataLayout.animate().cancel()
             description.animate().cancel()
             buttonsLayout.animate().cancel()
             trendingBadge.animate().cancel()
-            title.animate()
-                .translationY(translationY)
-                .setDuration(TRAILER_ANIM_DURATION)
-                .setInterpolator(android.view.animation.DecelerateInterpolator(1.8f))
-                .start()
+            basicDetailsLayout.animate().cancel()
             metadataLayout.animate()
                 .alpha(0f)
                 .setDuration(TRAILER_ANIM_DURATION)
@@ -185,6 +179,12 @@ class HeroCarouselCardPresenter(
                 .setDuration(TRAILER_ANIM_DURATION)
                 .withEndAction { trendingBadge.visibility = View.INVISIBLE }
                 .start()
+            val slideDown = 80f * density
+            basicDetailsLayout.animate()
+                .translationY(slideDown)
+                .setDuration(TRAILER_ANIM_DURATION)
+                .setInterpolator(android.view.animation.DecelerateInterpolator(1.8f))
+                .start()
         }
         fun resetTrailerStateImmediate() {
             title.animate().cancel()
@@ -192,7 +192,9 @@ class HeroCarouselCardPresenter(
             description.animate().cancel()
             buttonsLayout.animate().cancel()
             trendingBadge.animate().cancel()
+            basicDetailsLayout.animate().cancel()
             title.translationY = 0f
+            basicDetailsLayout.translationY = 0f
             metadataLayout.visibility = View.VISIBLE
             metadataLayout.alpha = 1f
             description.visibility = View.VISIBLE
@@ -465,8 +467,10 @@ class HeroCarouselCardPresenter(
             holder.focusBorder.translationZ = 4f * density
             holder.focusBorder.alpha = 1f
             holder.focusBorder.visibility = View.VISIBLE
+            holder.basicDetailsLayout.animate().cancel()
+            holder.basicDetailsLayout.translationY = 40f * density
             holder.title.animate().cancel()
-            holder.title.translationY = holder.TITLE_TRAILER_TRANSLATION_DP * density
+            holder.title.translationY = 16f * density
             holder.metadataLayout.animate().cancel()
             holder.metadataLayout.visibility = View.VISIBLE
             holder.metadataLayout.alpha = 0f
@@ -478,6 +482,11 @@ class HeroCarouselCardPresenter(
             holder.buttonsLayout.alpha = 0f
             holder.trendingBadge.animate().cancel()
             holder.trendingBadge.alpha = 0f
+            holder.basicDetailsLayout.animate()
+                .translationY(0f)
+                .setDuration(EXPAND_COLLAPSE_DURATION_MS)
+                .setInterpolator(DecelerateInterpolator(1.8f))
+                .start()
             holder.title.animate()
                 .translationY(0f)
                 .setDuration(EXPAND_COLLAPSE_DURATION_MS)
@@ -485,23 +494,29 @@ class HeroCarouselCardPresenter(
                 .start()
             holder.metadataLayout.animate()
                 .alpha(1f)
+                .setStartDelay(80)
                 .setDuration(EXPAND_COLLAPSE_DURATION_MS)
                 .start()
             holder.description.animate()
                 .alpha(1f)
+                .setStartDelay(80)
                 .setDuration(EXPAND_COLLAPSE_DURATION_MS)
                 .start()
             holder.buttonsLayout.animate()
                 .alpha(1f)
+                .setStartDelay(80)
                 .setDuration(EXPAND_COLLAPSE_DURATION_MS)
                 .start()
             holder.trendingBadge.animate()
                 .alpha(1f)
+                .setStartDelay(80)
                 .setDuration(EXPAND_COLLAPSE_DURATION_MS)
                 .start()
         } else {
             holder.title.animate().cancel()
             holder.title.translationY = 0f
+            holder.basicDetailsLayout.animate().cancel()
+            holder.basicDetailsLayout.translationY = 0f
             holder.focusBorder.alpha = 0f
             holder.focusBorder.visibility = View.GONE
             holder.focusBorder.elevation = 0f
@@ -527,11 +542,6 @@ class HeroCarouselCardPresenter(
                 val currentDetailsAlpha = startDetailsAlpha + (targetAlpha - startDetailsAlpha) * f
                 holder.basicDetailsLayout.alpha = currentDetailsAlpha
                 holder.bgShadow.alpha = currentDetailsAlpha
-                if (hasFocus) {
-                    holder.basicDetailsLayout.translationY = 16f * density * (1f - f)
-                } else {
-                    holder.basicDetailsLayout.translationY = 16f * density * f
-                }
             }
             doOnEnd {
                 if (!hasFocus) {
