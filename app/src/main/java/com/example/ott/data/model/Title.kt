@@ -1,5 +1,4 @@
-package com.example.ott.data.model
-
+﻿package com.example.ott.data.model
 data class Title(
     val id: Int,
     val name: String,

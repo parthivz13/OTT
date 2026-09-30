@@ -1,12 +1,10 @@
-package com.example.ott.sott.models
-
+﻿package com.example.ott.sott.models
 enum class PredefinePlaylistType {
     CON_W,
     WATCHLIST,
     AT_BYW,
     BYSL
 }
-
 data class BaseCategory(
     var Id: String? = null,
     var name: String? = null,

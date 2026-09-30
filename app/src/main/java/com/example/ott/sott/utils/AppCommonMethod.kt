@@ -1,18 +1,13 @@
-package com.example.ott.sott.utils
-
+﻿package com.example.ott.sott.utils
 import com.example.ott.types.Asset
 import com.example.ott.types.AssetImage
-
 object AppCommonMethod {
     fun addSeasonAndEpisodeNo(asset: Asset): String? =
         asset.tags?.get("SeasonEpisode")?.toString()
-
     fun getMetaByTag(asset: Asset, tag: String): String? =
         asset.metas?.get(tag)?.toString()
-
     fun getMetas(asset: Asset): String =
         asset.metas?.get("Metadata")?.toString().orEmpty()
-
     fun getQualities(asset: Asset): List<String> {
         val list = mutableListOf<String>()
         val tags = asset.tags
@@ -23,10 +18,8 @@ object AppCommonMethod {
         }
         return list
     }
-
     fun getTagsFromAsset(asset: Asset, tag: String): String =
         asset.tags?.get(tag)?.toString().orEmpty()
-
     fun getCardwiseImage(
         images: List<AssetImage>,
         ratio: String,

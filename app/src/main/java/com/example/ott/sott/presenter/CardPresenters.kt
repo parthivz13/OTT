@@ -1,5 +1,4 @@
-package com.example.ott.sott.presenter
-
+﻿package com.example.ott.sott.presenter
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -17,14 +16,9 @@ import com.example.ott.sott.networking.RailCommonData
 import com.example.ott.types.Asset
 import com.example.ott.types.StringValue
 import com.example.ott.ui.rows.top10.RankNumberView
-
-// -------------------------------------------------------------
-// 1. Landscape Card Presenter (16:9)
-// -------------------------------------------------------------
 open class LandScapeCardPresenter(
     val railCommonData: RailCommonData? = null
 ) : Presenter() {
-
     class ViewHolder(view: View) : Presenter.ViewHolder(view) {
         val root: View = view
         val surface: CardView = view.findViewById(R.id.card_surface)
@@ -34,12 +28,10 @@ open class LandScapeCardPresenter(
         val skeletonBg: View = view.findViewById(R.id.skeleton_bg)
         val progress: ProgressBar = view.findViewById(R.id.card_progress)
     }
-
     override fun onCreateViewHolder(parent: ViewGroup): Presenter.ViewHolder {
         val view = LayoutInflater.from(parent.context)
             .inflate(R.layout.card_landscape_item, parent, false)
         val holder = ViewHolder(view)
-
         view.setOnFocusChangeListener { _, hasFocus ->
             val density = parent.resources.displayMetrics.density
             val elevation = if (hasFocus) 8f else 3f
@@ -51,19 +43,15 @@ open class LandScapeCardPresenter(
             holder.focusRing.visibility = if (hasFocus) View.VISIBLE else View.INVISIBLE
             if (hasFocus) holder.focusRing.bringToFront()
         }
-
         return holder
     }
-
     override fun onBindViewHolder(viewHolder: Presenter.ViewHolder, item: Any?) {
         val holder = viewHolder as ViewHolder
         bindCard(holder, item)
     }
-
     protected open fun bindCard(holder: ViewHolder, item: Any?) {
         when (item) {
             is CustomAsset -> {
-                // Dummy Skeleton state during initial loading
                 holder.skeletonBg.visibility = View.VISIBLE
                 holder.image.setImageDrawable(null)
                 holder.title.text = ""
@@ -101,21 +89,15 @@ open class LandScapeCardPresenter(
             }
         }
     }
-
     override fun onUnbindViewHolder(viewHolder: Presenter.ViewHolder) {
         val holder = viewHolder as ViewHolder
         Glide.with(holder.image).clear(holder.image)
         holder.focusRing.alpha = 0f
     }
 }
-
-// -------------------------------------------------------------
-// 2. Continue Watching Card Presenter (Landscape + Progress Bar)
-// -------------------------------------------------------------
 class ContinueWatchingPresenter(
     railCommonData: RailCommonData? = null
 ) : LandScapeCardPresenter(railCommonData) {
-
     override fun bindCard(holder: ViewHolder, item: Any?) {
         super.bindCard(holder, item)
         if (item is Asset || item is Title) {
@@ -126,14 +108,9 @@ class ContinueWatchingPresenter(
         }
     }
 }
-
-// -------------------------------------------------------------
-// 3. Top 10 Card Presenter (Giant 3D Rank Number + Poster)
-// -------------------------------------------------------------
 open class TopTenCardPresenter(
     val railCommonData: RailCommonData? = null
 ) : Presenter() {
-
     class ViewHolder(view: View) : Presenter.ViewHolder(view) {
         val root: View = view
         val rankNumber: RankNumberView = view.findViewById(R.id.top10_rank_number)
@@ -143,12 +120,10 @@ open class TopTenCardPresenter(
         val focusRing: View = view.findViewById(R.id.top10_focus_ring)
         val badge: TextView = view.findViewById(R.id.top10_badge)
     }
-
     override fun onCreateViewHolder(parent: ViewGroup): Presenter.ViewHolder {
         val view = LayoutInflater.from(parent.context)
             .inflate(R.layout.card_top10_item, parent, false)
         val holder = ViewHolder(view)
-
         view.setOnFocusChangeListener { _, hasFocus ->
             holder.rankNumber.isCardFocused = hasFocus
             val density = parent.resources.displayMetrics.density
@@ -161,15 +136,12 @@ open class TopTenCardPresenter(
             holder.focusRing.visibility = if (hasFocus) View.VISIBLE else View.INVISIBLE
             if (hasFocus) holder.focusRing.bringToFront()
         }
-
         return holder
     }
-
     override fun onBindViewHolder(viewHolder: Presenter.ViewHolder, item: Any?) {
         val holder = viewHolder as ViewHolder
         when (item) {
             is CustomAsset -> {
-                // Dummy state: Show rank from item.Id, but surface is skeleton
                 val rankInt = (item.Id as? Int)?.plus(1) ?: 1
                 holder.rankNumber.rankText = rankInt.toString()
                 holder.title.text = ""
@@ -206,24 +178,17 @@ open class TopTenCardPresenter(
             }
         }
     }
-
     override fun onUnbindViewHolder(viewHolder: Presenter.ViewHolder) {
         val holder = viewHolder as ViewHolder
         Glide.with(holder.image).clear(holder.image)
         holder.focusRing.alpha = 0f
     }
 }
-
 class TopTenPortraitPresenter(railCommonData: RailCommonData? = null) : TopTenCardPresenter(railCommonData)
 class TopTenPortraitNineSixteenPresenter(railCommonData: RailCommonData? = null) : TopTenCardPresenter(railCommonData)
-
-// -------------------------------------------------------------
-// 4. Portrait Card Presenter (2:3 or 9:16)
-// -------------------------------------------------------------
 open class ItemPresenter(
     val railCommonData: RailCommonData? = null
 ) : Presenter() {
-
     class ViewHolder(view: View) : Presenter.ViewHolder(view) {
         val root: View = view
         val surface: CardView = view.findViewById(R.id.card_portrait_surface)
@@ -232,12 +197,10 @@ open class ItemPresenter(
         val focusRing: View = view.findViewById(R.id.card_portrait_focus_ring)
         val skeletonBg: View = view.findViewById(R.id.skeleton_portrait_bg)
     }
-
     override fun onCreateViewHolder(parent: ViewGroup): Presenter.ViewHolder {
         val view = LayoutInflater.from(parent.context)
             .inflate(R.layout.card_portrait_item, parent, false)
         val holder = ViewHolder(view)
-
         view.setOnFocusChangeListener { _, hasFocus ->
             val density = parent.resources.displayMetrics.density
             val elevation = if (hasFocus) 8f else 3f
@@ -249,10 +212,8 @@ open class ItemPresenter(
             holder.focusRing.visibility = if (hasFocus) View.VISIBLE else View.INVISIBLE
             if (hasFocus) holder.focusRing.bringToFront()
         }
-
         return holder
     }
-
     override fun onBindViewHolder(viewHolder: Presenter.ViewHolder, item: Any?) {
         val holder = viewHolder as ViewHolder
         when (item) {
@@ -291,14 +252,12 @@ open class ItemPresenter(
             }
         }
     }
-
     override fun onUnbindViewHolder(viewHolder: Presenter.ViewHolder) {
         val holder = viewHolder as ViewHolder
         Glide.with(holder.image).clear(holder.image)
         holder.focusRing.alpha = 0f
     }
 }
-
 class NineSixteenCardPresenter(railCommonData: RailCommonData? = null) : ItemPresenter(railCommonData)
 class SquareMediumPresenter(railCommonData: RailCommonData? = null) : ItemPresenter(railCommonData)
 class CircleCardPresenter(railCommonData: RailCommonData? = null) : ItemPresenter(railCommonData)

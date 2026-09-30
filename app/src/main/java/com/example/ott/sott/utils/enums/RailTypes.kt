@@ -1,5 +1,4 @@
-package com.example.ott.sott.utils.enums
-
+﻿package com.example.ott.sott.utils.enums
 enum class RailTypes {
     CAROUSEL_LDS_LANDSCAPE,
     HORIZONTAL_LDS_LANDSCAPE,

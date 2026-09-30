@@ -1,21 +1,17 @@
-package com.example.ott.data.repository
-
+﻿package com.example.ott.data.repository
 import androidx.core.text.HtmlCompat
 import com.example.ott.data.model.Title
 import com.example.ott.data.remote.ShowDto
 import com.example.ott.data.remote.TvMazeApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-
 class TvMazeRepository(private val api: TvMazeApi) {
-
     suspend fun getShows(): List<Title> = withContext(Dispatchers.IO) {
         api.getShows(page = 0)
             .filter { !it.image?.medium.isNullOrBlank() }
             .sortedByDescending { it.weight ?: 0 }
             .mapIndexed { index, dto -> dto.toDomain(index) }
     }
-
     private fun ShowDto.toDomain(index: Int): Title {
         val cleanSummary = if (!summary.isNullOrBlank()) {
             HtmlCompat.fromHtml(summary, HtmlCompat.FROM_HTML_MODE_LEGACY).toString().trim()
@@ -37,7 +33,6 @@ class TvMazeRepository(private val api: TvMazeApi) {
         }
         val quality = if (index % 2 == 0) "4K • Dolby Vision" else "4K • Dolby Atmos"
         val videoUrl = sampleVideos[index % sampleVideos.size]
-
         return Title(
             id = id,
             name = name.orEmpty(),
@@ -62,7 +57,6 @@ class TvMazeRepository(private val api: TvMazeApi) {
             seasonEpisode = if (genres?.isNotEmpty() == true) "S1:E1 • ${genres.first()}" else "S1:E1"
         )
     }
-
     companion object {
         private val sampleVideos = listOf(
             "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
