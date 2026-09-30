@@ -158,7 +158,11 @@ class HeroCarouselCardPresenter(
             description.animate().cancel()
             buttonsLayout.animate().cancel()
             trendingBadge.animate().cancel()
-            basicDetailsLayout.animate().cancel()
+            title.animate()
+                .translationY(32f * density)
+                .setDuration(TRAILER_ANIM_DURATION)
+                .setInterpolator(android.view.animation.DecelerateInterpolator(1.8f))
+                .start()
             metadataLayout.animate()
                 .alpha(0f)
                 .setDuration(TRAILER_ANIM_DURATION)
@@ -178,12 +182,6 @@ class HeroCarouselCardPresenter(
                 .alpha(0f)
                 .setDuration(TRAILER_ANIM_DURATION)
                 .withEndAction { trendingBadge.visibility = View.INVISIBLE }
-                .start()
-            val slideDown = 80f * density
-            basicDetailsLayout.animate()
-                .translationY(slideDown)
-                .setDuration(TRAILER_ANIM_DURATION)
-                .setInterpolator(android.view.animation.DecelerateInterpolator(1.8f))
                 .start()
         }
         fun resetTrailerStateImmediate() {
