@@ -152,37 +152,19 @@ class HeroCarouselCardPresenter(
             resetTrailerStateImmediate()
         }
         fun enterTrailerMode() {
-            val density = rootView.context.resources.displayMetrics.density
             title.animate().cancel()
             metadataLayout.animate().cancel()
             description.animate().cancel()
             buttonsLayout.animate().cancel()
             trendingBadge.animate().cancel()
-            title.animate()
-                .translationY(32f * density)
-                .setDuration(TRAILER_ANIM_DURATION)
-                .setInterpolator(android.view.animation.DecelerateInterpolator(1.8f))
-                .start()
-            metadataLayout.animate()
-                .alpha(0f)
-                .setDuration(TRAILER_ANIM_DURATION)
-                .withEndAction { metadataLayout.visibility = View.INVISIBLE }
-                .start()
-            description.animate()
-                .alpha(0f)
-                .setDuration(TRAILER_ANIM_DURATION)
-                .withEndAction { description.visibility = View.INVISIBLE }
-                .start()
-            buttonsLayout.animate()
-                .alpha(0f)
-                .setDuration(TRAILER_ANIM_DURATION)
-                .withEndAction { buttonsLayout.visibility = View.INVISIBLE }
-                .start()
-            trendingBadge.animate()
-                .alpha(0f)
-                .setDuration(TRAILER_ANIM_DURATION)
-                .withEndAction { trendingBadge.visibility = View.INVISIBLE }
-                .start()
+            metadataLayout.visibility = View.GONE
+            metadataLayout.alpha = 0f
+            description.visibility = View.GONE
+            description.alpha = 0f
+            buttonsLayout.visibility = View.GONE
+            buttonsLayout.alpha = 0f
+            trendingBadge.visibility = View.GONE
+            trendingBadge.alpha = 0f
         }
         fun resetTrailerStateImmediate() {
             title.animate().cancel()
@@ -271,6 +253,11 @@ class HeroCarouselCardPresenter(
         }
         animateCardExpansion(holder, hasFocus = holder.rootView.hasFocus(), animate = false)
         setupFocusListener(holder)
+        holder.rootView.post {
+            if (holder.rootView.hasFocus()) {
+                animateCardExpansion(holder, hasFocus = true, animate = false)
+            }
+        }
     }
     private fun bindCustomAsset(holder: CardViewHolder, item: CustomAsset) {
         holder.title.text = ""
