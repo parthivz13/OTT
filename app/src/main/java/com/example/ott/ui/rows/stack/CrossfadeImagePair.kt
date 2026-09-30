@@ -1,4 +1,4 @@
-﻿package com.example.ott.ui.rows.stack
+package com.example.ott.ui.rows.stack
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.view.View
@@ -40,7 +40,7 @@ class CrossfadeImagePair(container: FrameLayout, private val durationMs: Long = 
             incoming.alpha = 1f
             outgoing.alpha = 0f
         }
-        Glide.with(incoming)
+        Glide.with(incoming.context.applicationContext)
             .load(url)
             .diskCacheStrategy(DiskCacheStrategy.ALL)
             .centerCrop()
@@ -81,7 +81,9 @@ class CrossfadeImagePair(container: FrameLayout, private val durationMs: Long = 
         showingFront = !showingFront
         incoming.animate().cancel()
         outgoing.animate().cancel()
-        Glide.with(incoming).clear(incoming)
+        try {
+            Glide.with(incoming.context.applicationContext).clear(incoming)
+        } catch (_: Exception) {}
         val hasExistingContent = outgoing.drawable != null
         incoming.setImageDrawable(ColorDrawable(color))
         if (hasExistingContent) {

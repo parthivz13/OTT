@@ -275,8 +275,10 @@ class HeroCarouselCardPresenter(
         holder.basicDetailsLayout.visibility = View.VISIBLE
         holder.trailerUrl = null
         val imageUrl = item.images?.firstOrNull()?.url
-        Glide.with(holder.poster).load(imageUrl).apply(requestOptions).into(holder.poster)
-        Glide.with(holder.backdrop).load(imageUrl).apply(requestOptions).into(holder.backdrop)
+        try {
+            Glide.with(holder.poster.context.applicationContext).load(imageUrl).apply(requestOptions).into(holder.poster)
+            Glide.with(holder.backdrop.context.applicationContext).load(imageUrl).apply(requestOptions).into(holder.backdrop)
+        } catch (_: Exception) {}
     }
     private fun bindCustomKalturaAsset(holder: CardViewHolder, context: Context, item: CustomKalturaAsset) {
         holder.title.text = item.name.orEmpty()
@@ -285,8 +287,10 @@ class HeroCarouselCardPresenter(
         holder.basicDetailsLayout.visibility = View.VISIBLE
         holder.trailerUrl = null
         val imageUrl = item.images?.firstOrNull()?.url
-        Glide.with(holder.poster).load(imageUrl).apply(requestOptions).into(holder.poster)
-        Glide.with(holder.backdrop).load(imageUrl).apply(requestOptions).into(holder.backdrop)
+        try {
+            Glide.with(holder.poster.context.applicationContext).load(imageUrl).apply(requestOptions).into(holder.poster)
+            Glide.with(holder.backdrop.context.applicationContext).load(imageUrl).apply(requestOptions).into(holder.backdrop)
+        } catch (_: Exception) {}
     }
     private fun bindKalturaAsset(holder: CardViewHolder, context: Context, asset: Asset) {
         holder.title.text = asset.name.orEmpty()
@@ -322,8 +326,10 @@ class HeroCarouselCardPresenter(
         val backdropUrl = asset.images?.takeIf { it.isNotEmpty() }?.let {
             AppCommonMethod.getCardwiseImage(it, AppConstants.RATIO_16X9_cover, selectedW, selectedH)
         } ?: asset.images?.firstOrNull()?.url ?: posterUrl
-        Glide.with(holder.poster).load(posterUrl).apply(requestOptions).into(holder.poster)
-        Glide.with(holder.backdrop).load(backdropUrl).apply(requestOptions).into(holder.backdrop)
+        try {
+            Glide.with(holder.poster.context.applicationContext).load(posterUrl).apply(requestOptions).into(holder.poster)
+            Glide.with(holder.backdrop.context.applicationContext).load(backdropUrl).apply(requestOptions).into(holder.backdrop)
+        } catch (_: Exception) {}
         holder.rootView.setOnClickListener { onItemClicked?.invoke(asset) }
         holder.btnWatchNow.setOnClickListener { onItemClicked?.invoke(asset) }
         holder.btnAddToWatchlist.setOnClickListener {
@@ -398,8 +404,10 @@ class HeroCarouselCardPresenter(
         }
         val posterUrl = title.posterUrl ?: title.backdropUrl
         val backdropUrl = title.backdropUrl ?: title.posterUrl
-        Glide.with(holder.poster).load(posterUrl).apply(requestOptions).into(holder.poster)
-        Glide.with(holder.backdrop).load(backdropUrl).apply(requestOptions).into(holder.backdrop)
+        try {
+            Glide.with(holder.poster.context.applicationContext).load(posterUrl).apply(requestOptions).into(holder.poster)
+            Glide.with(holder.backdrop.context.applicationContext).load(backdropUrl).apply(requestOptions).into(holder.backdrop)
+        } catch (_: Exception) {}
         holder.rootView.setOnClickListener { onItemClicked?.invoke(title) }
         holder.btnWatchNow.setOnClickListener { onItemClicked?.invoke(title) }
         holder.btnAddToWatchlist.setOnClickListener {
@@ -707,8 +715,10 @@ class HeroCarouselCardPresenter(
         clearBasicDetails(holder)
         holder.trailerUrl = null
         holder.boundItem = null
-        Glide.with(holder.poster).clear(holder.poster)
-        Glide.with(holder.backdrop).clear(holder.backdrop)
+        try {
+            Glide.with(holder.poster.context.applicationContext).clear(holder.poster)
+            Glide.with(holder.backdrop.context.applicationContext).clear(holder.backdrop)
+        } catch (_: Exception) {}
         holder.poster.setImageDrawable(null)
         holder.backdrop.setImageDrawable(null)
         holder.revertToPoster()
@@ -725,8 +735,8 @@ class HeroCarouselCardPresenter(
         holder.anim?.cancel()
         holder.anim = null
         try {
-            Glide.with(holder.poster).clear(holder.poster)
-            Glide.with(holder.backdrop).clear(holder.backdrop)
+            Glide.with(holder.poster.context.applicationContext).clear(holder.poster)
+            Glide.with(holder.backdrop.context.applicationContext).clear(holder.backdrop)
         } catch (_: Exception) {}
     }
 }

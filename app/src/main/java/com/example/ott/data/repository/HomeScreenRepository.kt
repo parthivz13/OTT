@@ -1,4 +1,4 @@
-﻿package com.example.ott.data.repository
+package com.example.ott.data.repository
 import com.example.ott.data.model.Title
 import com.example.ott.di.ServiceLocator
 import com.example.ott.sott.models.BaseCategory
@@ -206,6 +206,28 @@ class HomeScreenRepository {
         )
     }
     private fun titleToAsset(title: Title): Asset {
+        val metaParts = listOfNotNull(
+            title.year.takeIf { it.isNotBlank() },
+            title.genre.takeIf { it.isNotBlank() }
+        )
+        val metasMap = mutableMapOf<String, Any?>(
+            "LongSummary" to title.overview,
+            "star_rating" to String.format("%.1f", title.rating),
+            "ParentalRating" to title.contentRating,
+            "Quality" to title.qualityTag,
+            "Year" to title.year,
+            "Genre" to title.genre,
+            "Badge" to (title.badge ?: ""),
+            "Metadata" to metaParts.joinToString(" • ")
+        )
+        val tagsMap = mutableMapOf<String, Any?>(
+            com.example.ott.sott.utils.constants.AppConstants.PARENTAL_RATING to title.contentRating
+        )
+        if (title.is4K) tagsMap["4K"] = "4K"
+        if (title.isHD) tagsMap["HD"] = "HD"
+        if (title.isAD) tagsMap["AD"] = "AD"
+        if (!title.seasonEpisode.isNullOrEmpty()) tagsMap["SeasonEpisode"] = title.seasonEpisode
+
         return Asset(
             id = title.id.toString(),
             name = title.name,
@@ -217,15 +239,8 @@ class HomeScreenRepository {
             mediaFiles = listOf(
                 MediaFile(type = "Preview", url = title.trailerUrl ?: title.videoUrl, duration = title.durationSeconds.toLong())
             ),
-            metas = mutableMapOf(
-                "LongSummary" to title.overview,
-                "star_rating" to String.format("%.1f", title.rating),
-                "ParentalRating" to title.contentRating,
-                "Quality" to title.qualityTag,
-                "Year" to title.year,
-                "Genre" to title.genre,
-                "Badge" to (title.badge ?: "")
-            )
+            tags = tagsMap,
+            metas = metasMap
         )
     }
 }

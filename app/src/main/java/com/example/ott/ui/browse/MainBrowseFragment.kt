@@ -1,4 +1,4 @@
-﻿package com.example.ott.ui.browse
+package com.example.ott.ui.browse
 import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
 import android.os.Bundle
@@ -85,16 +85,21 @@ class MainBrowseFragment : BrowseSupportFragment() {
     }
     private fun updateBackground(title: Title) {
         val url = title.backdropUrl ?: title.posterUrl ?: return
+        val appContext = context?.applicationContext ?: return
         val metrics = resources.displayMetrics
-        Glide.with(this)
-            .asBitmap()
-            .load(url)
-            .into(object : CustomTarget<Bitmap>(metrics.widthPixels, metrics.heightPixels) {
-                override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
-                    backgroundManager.setBitmap(resource)
-                }
-                override fun onLoadCleared(placeholder: Drawable?) = Unit
-            })
+        try {
+            Glide.with(appContext)
+                .asBitmap()
+                .load(url)
+                .into(object : CustomTarget<Bitmap>(metrics.widthPixels, metrics.heightPixels) {
+                    override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
+                        if (isAdded) {
+                            backgroundManager.setBitmap(resource)
+                        }
+                    }
+                    override fun onLoadCleared(placeholder: Drawable?) = Unit
+                })
+        } catch (_: Exception) {}
     }
     companion object {
         private const val TAG = "MainBrowseFragment"

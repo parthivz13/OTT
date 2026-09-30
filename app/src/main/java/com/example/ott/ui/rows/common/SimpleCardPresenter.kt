@@ -1,4 +1,4 @@
-﻿package com.example.ott.ui.rows.common
+package com.example.ott.ui.rows.common
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -31,11 +31,13 @@ class SimpleCardPresenter : Presenter() {
         val holder = viewHolder as ViewHolder
         val title = item as Title
         holder.title.text = title.name
-        Glide.with(holder.image)
-            .load(title.posterUrl)
-            .centerCrop()
-            .placeholder(R.drawable.poster_placeholder)
-            .into(holder.image)
+        try {
+            Glide.with(holder.image.context.applicationContext)
+                .load(title.posterUrl)
+                .centerCrop()
+                .placeholder(R.drawable.poster_placeholder)
+                .into(holder.image)
+        } catch (_: Exception) {}
     }
     override fun onUnbindViewHolder(viewHolder: Presenter.ViewHolder) {
         val holder = viewHolder as ViewHolder

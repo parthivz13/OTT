@@ -1,4 +1,4 @@
-﻿package com.example.ott.ui.browse
+package com.example.ott.ui.browse
 import android.os.Bundle
 import android.util.Log
 import android.view.KeyEvent
@@ -27,10 +27,12 @@ class MainActivity : FragmentActivity() {
         val scrim = backdropScrimView ?: return
         scrim.animate().cancel()
         scrim.animate().alpha(1f).setDuration(300).start()
-        com.bumptech.glide.Glide.with(this)
-            .load(imageUrl)
-            .transition(com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions.withCrossFade(300))
-            .into(iv)
+        try {
+            com.bumptech.glide.Glide.with(applicationContext)
+                .load(imageUrl)
+                .transition(com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions.withCrossFade(300))
+                .into(iv)
+        } catch (_: Exception) {}
         iv.animate().cancel()
         iv.animate().alpha(1f).setDuration(300).start()
     }
@@ -41,6 +43,9 @@ class MainActivity : FragmentActivity() {
         val scrim = backdropScrimView ?: return
         iv.animate().cancel()
         iv.animate().alpha(0f).setDuration(300).withEndAction {
+            try {
+                com.bumptech.glide.Glide.with(applicationContext).clear(iv)
+            } catch (_: Exception) {}
             iv.setImageDrawable(null)
         }.start()
         scrim.animate().cancel()
@@ -60,6 +65,8 @@ class MainActivity : FragmentActivity() {
         setUpSideNav()
     }
     override fun onDestroy() {
+        backdropImageView?.animate()?.cancel()
+        backdropScrimView?.animate()?.cancel()
         super.onDestroy()
         if (instance === this) {
             instance = null

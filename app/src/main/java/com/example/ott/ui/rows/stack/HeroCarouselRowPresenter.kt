@@ -1,4 +1,4 @@
-﻿package com.example.ott.ui.rows.stack
+package com.example.ott.ui.rows.stack
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.AnimatorSet
@@ -24,6 +24,7 @@ import androidx.leanback.widget.ListRow
 import androidx.leanback.widget.ObjectAdapter
 import androidx.leanback.widget.RowPresenter
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.bumptech.glide.Glide
@@ -50,7 +51,7 @@ class HeroCarouselRowPresenter(
     companion object {
         private const val TAG = "DataChecker"
         private const val AUTO_ROTATE_INTERVAL_MS = 14000L
-        private const val FOCUS_HOLD_BEFORE_AUTOPLAY_MS = 600L
+        private const val FOCUS_HOLD_BEFORE_AUTOPLAY_MS = 3000L
         private const val TRAILER_CROSSFADE_MS = 250L
         private const val DOT_SIZE_DP = 6
         private const val DOT_ACTIVE_WIDTH_DP = 24
@@ -118,6 +119,7 @@ class HeroCarouselRowPresenter(
         val textBlock: View = rootView.findViewById(R.id.hero_text_block)
         val badge: TextView = rootView.findViewById(R.id.hero_badge)
         val title: TextView = rootView.findViewById(R.id.hero_title)
+        val metaRow: View = rootView.findViewById(R.id.hero_meta_row)
         val contentRating: TextView = rootView.findViewById(R.id.hero_content_rating)
         val meta: TextView = rootView.findViewById(R.id.hero_meta)
         val qualityBadge: TextView = rootView.findViewById(R.id.hero_quality_badge)
@@ -145,6 +147,32 @@ class HeroCarouselRowPresenter(
             }
             activePlayingTextureView = null
             isTrailerPlaying = false
+            title.animate().cancel()
+            metaRow.animate().cancel()
+            overview.animate().cancel()
+            badge.animate().cancel()
+            title.translationY = 0f
+            if (meta.text.isNotEmpty() || contentRating.text.isNotEmpty() || qualityBadge.text.isNotEmpty()) {
+                metaRow.visibility = View.VISIBLE
+                metaRow.alpha = 1f
+            } else {
+                metaRow.visibility = View.INVISIBLE
+                metaRow.alpha = 0f
+            }
+            if (overview.text.isNotEmpty()) {
+                overview.visibility = View.VISIBLE
+                overview.alpha = 1f
+            } else {
+                overview.visibility = View.INVISIBLE
+                overview.alpha = 0f
+            }
+            if (badge.text.isNotEmpty()) {
+                badge.visibility = View.VISIBLE
+                badge.alpha = 1f
+            } else {
+                badge.visibility = View.INVISIBLE
+                badge.alpha = 0f
+            }
         }
     }
     private val fallbackPalette = intArrayOf(
@@ -266,10 +294,15 @@ class HeroCarouselRowPresenter(
                     renderDots(holder, holder.items.size, holder.selectedIndex)
                 }
                 override fun onItemRangeInserted(positionStart: Int, itemCount: Int) {
+                    val wasEmpty = holder.items.isEmpty()
                     for (i in positionStart until positionStart + itemCount) {
                         adapter.get(i)?.let { asset -> bindAsset(holder, i, asset) }
                     }
-                    renderDots(holder, holder.items.size, holder.selectedIndex)
+                    if (wasEmpty && holder.items.isNotEmpty()) {
+                        bindInitialState(holder)
+                    } else {
+                        renderDots(holder, holder.items.size, holder.selectedIndex)
+                    }
                 }
                 override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) {
                     val excess = holder.items.size - adapter.size()
@@ -326,6 +359,7 @@ class HeroCarouselRowPresenter(
                 if (holder.cardViews.isNotEmpty()) {
                     loadAsset(holder.cardViews[0], item, isFocused = true)
                     bindTextViews(holder, item)
+                    stopTrailer(holder, resetAlpha = true)
                     scheduleTrailer(holder)
                 }
             }
@@ -495,6 +529,7 @@ class HeroCarouselRowPresenter(
         v0.card.bringToFront()
         holder.card.bringToFront()
         bindTextViews(holder, activeItem)
+        resetTrailerMode(holder, animateToNormal = false)
         renderDots(holder, totalCount, holder.selectedIndex)
         preloadUpcoming(holder, holder.selectedIndex)
         scheduleTrailer(holder)
@@ -661,6 +696,7 @@ class HeroCarouselRowPresenter(
         val activeItem = itemAt(holder, activeIndex)
         if (activeItem != null) {
             bindTextViews(holder, activeItem)
+            resetTrailerMode(holder, animateToNormal = true)
         }
         renderDots(holder, totalCount, activeIndex)
         preloadUpcoming(holder, activeIndex)
@@ -783,7 +819,14 @@ class HeroCarouselRowPresenter(
             null
         }
         val trailerUrl = if (!trailerFromPref.isNullOrEmpty()) trailerFromPref else initialTrailer
-        val metadataText = AppCommonMethod.getMetas(asset)
+        val rawMetadataText = AppCommonMethod.getMetas(asset)
+        val metadataText = if (rawMetadataText.isNotEmpty()) {
+            rawMetadataText
+        } else {
+            val year = asset.metas?.get("Year")?.toString().orEmpty()
+            val genre = asset.metas?.get("Genre")?.toString().orEmpty()
+            listOfNotNull(year.takeIf { it.isNotEmpty() }, genre.takeIf { it.isNotEmpty() }).joinToString(" • ")
+        }
         val duration = asset.mediaFiles?.firstOrNull()?.duration ?: 0L
         val hours = (duration / 3600).toInt()
         val minutes = ((duration % 3600) / 60).toInt()
@@ -794,7 +837,12 @@ class HeroCarouselRowPresenter(
             else -> ""
         }
         val qualities = AppCommonMethod.getQualities(asset)
+        val qualityTag = qualities.joinToString(" • ")
+            .ifEmpty { asset.metas?.get("Quality")?.toString().orEmpty() }
+            .ifEmpty { "4K • Dolby Vision" }
         val parentalRating = AppCommonMethod.getTagsFromAsset(asset, AppConstants.PARENTAL_RATING)
+            .ifEmpty { asset.metas?.get("ParentalRating")?.toString().orEmpty() }
+            .ifEmpty { "U/A 16+" }
         val ratingData = AppCommonMethod.getMetaByTag(asset, AppConstants.star_rating)
         val ratingFormatted = if (!ratingData.isNullOrEmpty() && ratingData != "0") {
             ratingData.toDoubleOrNull()?.let { "★ " + String.format("%.1f", it) }.orEmpty()
@@ -811,6 +859,7 @@ class HeroCarouselRowPresenter(
         val imageUrl = asset.images?.takeIf { it.isNotEmpty() }?.let {
             AppCommonMethod.getCardwiseImage(it, ratio, width, height)
         } ?: asset.images?.firstOrNull()?.url
+        val badge = asset.metas?.get("Badge")?.toString()?.takeIf { it.isNotBlank() }
         return ResolvedAsset(
             id = asset.id ?: asset.hashCode(),
             name = asset.name.orEmpty(),
@@ -819,8 +868,8 @@ class HeroCarouselRowPresenter(
             trailerUrl = trailerUrl,
             contentRating = parentalRating,
             metaLine = metaParts.joinToString("  •  "),
-            qualityTag = qualities.joinToString(" • "),
-            badge = null,
+            qualityTag = qualityTag,
+            badge = badge,
             showBasicDetails = true
         )
     }
@@ -855,58 +904,91 @@ class HeroCarouselRowPresenter(
     }
     private fun bindTextViews(holder: ViewHolder, item: Any?) {
         val asset = resolveAsset(holder.stack.context, item, true)
+        Log.d("DataChecker", "bindTextViews: name=${asset?.name}, desc=${asset?.description}, rating=${asset?.contentRating}, meta=${asset?.metaLine}, quality=${asset?.qualityTag}")
         if (asset == null || !asset.showBasicDetails) {
             holder.title.text = ""
-            holder.overview.visibility = View.GONE
+            holder.overview.text = ""
+            holder.contentRating.text = ""
+            holder.meta.text = ""
+            holder.qualityBadge.text = ""
+            holder.badge.text = ""
+            holder.overview.visibility = View.INVISIBLE
+            holder.overview.alpha = 0f
             holder.contentRating.visibility = View.GONE
             holder.meta.visibility = View.GONE
             holder.qualityBadge.visibility = View.GONE
-            holder.badge.visibility = View.GONE
+            holder.badge.visibility = View.INVISIBLE
+            holder.badge.alpha = 0f
+            holder.metaRow.visibility = View.INVISIBLE
+            holder.metaRow.alpha = 0f
             return
         }
         holder.title.text = asset.name
+        holder.title.translationY = 0f
         if (asset.description.isNotEmpty()) {
             holder.overview.text = asset.description
             holder.overview.visibility = View.VISIBLE
+            holder.overview.alpha = 1f
         } else {
-            holder.overview.visibility = View.GONE
+            holder.overview.text = ""
+            holder.overview.visibility = View.INVISIBLE
+            holder.overview.alpha = 0f
         }
+        var hasMetaRowItem = false
         if (asset.contentRating.isNotEmpty()) {
             holder.contentRating.text = asset.contentRating
             holder.contentRating.visibility = View.VISIBLE
+            hasMetaRowItem = true
         } else {
             holder.contentRating.visibility = View.GONE
         }
         if (asset.metaLine.isNotEmpty()) {
             holder.meta.text = asset.metaLine
             holder.meta.visibility = View.VISIBLE
+            hasMetaRowItem = true
         } else {
             holder.meta.visibility = View.GONE
         }
         if (asset.qualityTag.isNotEmpty()) {
             holder.qualityBadge.text = asset.qualityTag
             holder.qualityBadge.visibility = View.VISIBLE
+            hasMetaRowItem = true
         } else {
             holder.qualityBadge.visibility = View.GONE
+        }
+        if (hasMetaRowItem) {
+            holder.metaRow.visibility = View.VISIBLE
+            holder.metaRow.alpha = 1f
+        } else {
+            holder.metaRow.visibility = View.INVISIBLE
+            holder.metaRow.alpha = 0f
         }
         if (!asset.badge.isNullOrBlank()) {
             holder.badge.text = asset.badge
             holder.badge.visibility = View.VISIBLE
+            holder.badge.alpha = 1f
         } else {
-            holder.badge.visibility = View.GONE
+            holder.badge.text = ""
+            holder.badge.visibility = View.INVISIBLE
+            holder.badge.alpha = 0f
         }
+        holder.textBlock.requestLayout()
+        holder.card.requestLayout()
     }
     private fun preloadUpcoming(holder: ViewHolder, index: Int) {
         val context = holder.stack.context
+        val appContext = context.applicationContext
         val preloadRange = (index - 1)..(index + 4)
         for (i in preloadRange) {
             if (i == index) continue
             val item = itemAt(holder, i) ?: continue
             val url = resolveAsset(context, item, false)?.imageUrl ?: continue
-            Glide.with(context)
-                .load(url)
-                .diskCacheStrategy(DiskCacheStrategy.ALL)
-                .preload()
+            try {
+                Glide.with(appContext)
+                    .load(url)
+                    .diskCacheStrategy(DiskCacheStrategy.ALL)
+                    .preload()
+            } catch (_: Exception) {}
         }
     }
     private fun itemAt(holder: ViewHolder, index: Int): Any? {
@@ -1036,17 +1118,132 @@ class HeroCarouselRowPresenter(
         player.setVideoTextureView(textureView)
         player.setMediaItem(MediaItem.fromUri(trailerUrl))
         player.repeatMode = Player.REPEAT_MODE_ONE
+
+        textureView.animate().cancel()
+        textureView.alpha = 0f
+        textureView.visibility = View.VISIBLE
+
+        val listener = object : Player.Listener {
+            private var frameRendered = false
+            private fun onStarted() {
+                if (frameRendered) return
+                frameRendered = true
+                player.removeListener(this)
+                if (holder.isTrailerPlaying && activeHolder === holder) {
+                    textureView.animate().cancel()
+                    textureView.animate()
+                        .alpha(1f)
+                        .setDuration(TRAILER_CROSSFADE_MS)
+                        .withEndAction {
+                            if (holder.isTrailerPlaying && activeHolder === holder) {
+                                enterTrailerMode(holder)
+                            }
+                        }
+                        .start()
+                }
+            }
+            override fun onRenderedFirstFrame() {
+                onStarted()
+            }
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying) {
+                    onStarted()
+                }
+            }
+            override fun onPlayerError(error: PlaybackException) {
+                player.removeListener(this)
+                if (activeHolder === holder) {
+                    stopTrailer(holder, resetAlpha = true)
+                }
+            }
+        }
+        player.addListener(listener)
         player.prepare()
         player.playWhenReady = true
         holder.activePlayingTextureView = textureView
         holder.isTrailerPlaying = true
-        textureView.visibility = View.VISIBLE
-        textureView.alpha = 0f
-        textureView.animate().cancel()
-        textureView.animate()
-            .alpha(1f)
-            .setDuration(TRAILER_CROSSFADE_MS)
+    }
+    private fun enterTrailerMode(holder: ViewHolder) {
+        val density = holder.stack.context.resources.displayMetrics.density
+        val targetShift = if (holder.overview.height > 0 && holder.overview.bottom > holder.title.bottom) {
+            (holder.overview.bottom - holder.title.bottom).toFloat()
+        } else if (holder.metaRow.height > 0 && holder.metaRow.bottom > holder.title.bottom) {
+            (holder.metaRow.bottom - holder.title.bottom).toFloat()
+        } else {
+            44f * density
+        }
+
+        holder.title.animate().cancel()
+        holder.title.animate()
+            .translationY(targetShift)
+            .setDuration(300L)
+            .setInterpolator(DecelerateInterpolator(1.8f))
             .start()
+        holder.metaRow.animate().cancel()
+        holder.metaRow.animate()
+            .alpha(0f)
+            .setDuration(250L)
+            .withEndAction { holder.metaRow.visibility = View.INVISIBLE }
+            .start()
+        holder.overview.animate().cancel()
+        holder.overview.animate()
+            .alpha(0f)
+            .setDuration(250L)
+            .withEndAction { holder.overview.visibility = View.INVISIBLE }
+            .start()
+        holder.badge.animate().cancel()
+        holder.badge.animate()
+            .alpha(0f)
+            .setDuration(250L)
+            .withEndAction { holder.badge.visibility = View.INVISIBLE }
+            .start()
+    }
+    private fun resetTrailerMode(holder: ViewHolder, animateToNormal: Boolean = false) {
+        holder.title.animate().cancel()
+        holder.metaRow.animate().cancel()
+        holder.overview.animate().cancel()
+        holder.badge.animate().cancel()
+        if (holder.meta.text.isNotEmpty() || holder.contentRating.text.isNotEmpty() || holder.qualityBadge.text.isNotEmpty()) {
+            holder.metaRow.visibility = View.VISIBLE
+        }
+        if (holder.overview.text.isNotEmpty()) {
+            holder.overview.visibility = View.VISIBLE
+        }
+        if (holder.badge.text.isNotEmpty()) {
+            holder.badge.visibility = View.VISIBLE
+        }
+        if (animateToNormal) {
+            val density = holder.stack.context.resources.displayMetrics.density
+            val startY = if (holder.title.translationY > 0f) holder.title.translationY else 36f * density
+            holder.title.translationY = startY
+            holder.title.animate()
+                .translationY(0f)
+                .setDuration(280L)
+                .setInterpolator(DecelerateInterpolator(1.8f))
+                .start()
+            holder.metaRow.alpha = 0f
+            holder.metaRow.animate()
+                .alpha(1f)
+                .setDuration(280L)
+                .start()
+            holder.overview.alpha = 0f
+            holder.overview.animate()
+                .alpha(1f)
+                .setDuration(280L)
+                .start()
+            if (holder.badge.text.isNotEmpty()) {
+                holder.badge.alpha = 0f
+                holder.badge.animate()
+                    .alpha(1f)
+                    .setDuration(280L)
+                    .start()
+            }
+        } else {
+            holder.title.translationY = 0f
+            holder.metaRow.alpha = 1f
+            holder.overview.alpha = 1f
+            holder.badge.alpha = 1f
+        }
     }
     private fun stopTrailer(holder: ViewHolder, resetAlpha: Boolean = true) {
         cancelPendingAutoplay()
@@ -1061,6 +1258,8 @@ class HeroCarouselRowPresenter(
         }
         if (resetAlpha) {
             holder.revertToPoster()
+        } else {
+            resetTrailerMode(holder, animateToNormal = false)
         }
     }
 }

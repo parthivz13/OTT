@@ -1,4 +1,4 @@
-﻿package com.example.ott.sott.presenter
+package com.example.ott.sott.presenter
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -62,11 +62,13 @@ open class LandScapeCardPresenter(
                 holder.title.text = item.name.orEmpty()
                 val imageUrl = item.images?.firstOrNull()?.url
                 if (!imageUrl.isNullOrEmpty()) {
-                    Glide.with(holder.image)
-                        .load(imageUrl)
-                        .centerCrop()
-                        .diskCacheStrategy(DiskCacheStrategy.ALL)
-                        .into(holder.image)
+                    try {
+                        Glide.with(holder.image.context.applicationContext)
+                            .load(imageUrl)
+                            .centerCrop()
+                            .diskCacheStrategy(DiskCacheStrategy.ALL)
+                            .into(holder.image)
+                    } catch (_: Exception) {}
                 } else {
                     holder.image.setImageDrawable(null)
                 }
@@ -75,11 +77,13 @@ open class LandScapeCardPresenter(
             is Title -> {
                 holder.skeletonBg.visibility = View.GONE
                 holder.title.text = item.name
-                Glide.with(holder.image)
-                    .load(item.backdropUrl ?: item.posterUrl)
-                    .centerCrop()
-                    .diskCacheStrategy(DiskCacheStrategy.ALL)
-                    .into(holder.image)
+                try {
+                    Glide.with(holder.image.context.applicationContext)
+                        .load(item.backdropUrl ?: item.posterUrl)
+                        .centerCrop()
+                        .diskCacheStrategy(DiskCacheStrategy.ALL)
+                        .into(holder.image)
+                } catch (_: Exception) {}
                 holder.progress.visibility = View.GONE
             }
             else -> {
@@ -91,7 +95,9 @@ open class LandScapeCardPresenter(
     }
     override fun onUnbindViewHolder(viewHolder: Presenter.ViewHolder) {
         val holder = viewHolder as ViewHolder
-        Glide.with(holder.image).clear(holder.image)
+        try {
+            Glide.with(holder.image.context.applicationContext).clear(holder.image)
+        } catch (_: Exception) {}
         holder.focusRing.alpha = 0f
     }
 }
@@ -157,11 +163,13 @@ open class TopTenCardPresenter(
                 holder.badge.visibility = View.VISIBLE
                 val imageUrl = item.images?.firstOrNull()?.url
                 if (!imageUrl.isNullOrEmpty()) {
-                    Glide.with(holder.image)
-                        .load(imageUrl)
-                        .centerCrop()
-                        .diskCacheStrategy(DiskCacheStrategy.ALL)
-                        .into(holder.image)
+                    try {
+                        Glide.with(holder.image.context.applicationContext)
+                            .load(imageUrl)
+                            .centerCrop()
+                            .diskCacheStrategy(DiskCacheStrategy.ALL)
+                            .into(holder.image)
+                    } catch (_: Exception) {}
                 } else {
                     holder.image.setImageDrawable(null)
                 }
@@ -170,17 +178,21 @@ open class TopTenCardPresenter(
                 holder.rankNumber.rankText = "1"
                 holder.title.text = item.name
                 holder.badge.visibility = View.VISIBLE
-                Glide.with(holder.image)
-                    .load(item.posterUrl ?: item.backdropUrl)
-                    .centerCrop()
-                    .diskCacheStrategy(DiskCacheStrategy.ALL)
-                    .into(holder.image)
+                try {
+                    Glide.with(holder.image.context.applicationContext)
+                        .load(item.posterUrl ?: item.backdropUrl)
+                        .centerCrop()
+                        .diskCacheStrategy(DiskCacheStrategy.ALL)
+                        .into(holder.image)
+                } catch (_: Exception) {}
             }
         }
     }
     override fun onUnbindViewHolder(viewHolder: Presenter.ViewHolder) {
         val holder = viewHolder as ViewHolder
-        Glide.with(holder.image).clear(holder.image)
+        try {
+            Glide.with(holder.image.context.applicationContext).clear(holder.image)
+        } catch (_: Exception) {}
         holder.focusRing.alpha = 0f
     }
 }
@@ -227,11 +239,13 @@ open class ItemPresenter(
                 holder.title.text = item.name.orEmpty()
                 val imageUrl = item.images?.firstOrNull()?.url
                 if (!imageUrl.isNullOrEmpty()) {
-                    Glide.with(holder.image)
-                        .load(imageUrl)
-                        .centerCrop()
-                        .diskCacheStrategy(DiskCacheStrategy.ALL)
-                        .into(holder.image)
+                    try {
+                        Glide.with(holder.image.context.applicationContext)
+                            .load(imageUrl)
+                            .centerCrop()
+                            .diskCacheStrategy(DiskCacheStrategy.ALL)
+                            .into(holder.image)
+                    } catch (_: Exception) {}
                 } else {
                     holder.image.setImageDrawable(null)
                 }
@@ -239,11 +253,13 @@ open class ItemPresenter(
             is Title -> {
                 holder.skeletonBg.visibility = View.GONE
                 holder.title.text = item.name
-                Glide.with(holder.image)
-                    .load(item.posterUrl ?: item.backdropUrl)
-                    .centerCrop()
-                    .diskCacheStrategy(DiskCacheStrategy.ALL)
-                    .into(holder.image)
+                try {
+                    Glide.with(holder.image.context.applicationContext)
+                        .load(item.posterUrl ?: item.backdropUrl)
+                        .centerCrop()
+                        .diskCacheStrategy(DiskCacheStrategy.ALL)
+                        .into(holder.image)
+                } catch (_: Exception) {}
             }
             else -> {
                 holder.skeletonBg.visibility = View.VISIBLE
@@ -254,7 +270,9 @@ open class ItemPresenter(
     }
     override fun onUnbindViewHolder(viewHolder: Presenter.ViewHolder) {
         val holder = viewHolder as ViewHolder
-        Glide.with(holder.image).clear(holder.image)
+        try {
+            Glide.with(holder.image.context.applicationContext).clear(holder.image)
+        } catch (_: Exception) {}
         holder.focusRing.alpha = 0f
     }
 }

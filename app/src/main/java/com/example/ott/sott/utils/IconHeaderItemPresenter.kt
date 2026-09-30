@@ -1,4 +1,4 @@
-﻿package com.example.ott.sott.utils
+package com.example.ott.sott.utils
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -26,9 +26,11 @@ class IconHeaderItemPresenter : RowHeaderPresenter() {
         holder.titleView.text = headerItem.name
         if (headerItem is IconHeaderItem && !headerItem.iconUrl.isNullOrEmpty()) {
             holder.iconView.visibility = View.VISIBLE
-            Glide.with(holder.iconView)
-                .load(headerItem.iconUrl)
-                .into(holder.iconView)
+            try {
+                Glide.with(holder.iconView.context.applicationContext)
+                    .load(headerItem.iconUrl)
+                    .into(holder.iconView)
+            } catch (_: Exception) {}
         } else {
             holder.iconView.visibility = View.GONE
         }

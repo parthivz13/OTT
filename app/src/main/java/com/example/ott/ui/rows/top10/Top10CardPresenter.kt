@@ -1,4 +1,4 @@
-﻿package com.example.ott.ui.rows.top10
+package com.example.ott.ui.rows.top10
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -51,15 +51,19 @@ class Top10CardPresenter : Presenter() {
         val top10Item = item as? Top10Item ?: return
         holder.rankNumber.rankText = top10Item.rank.toString()
         holder.title.text = top10Item.title.name
-        Glide.with(holder.image)
-            .load(top10Item.title.posterUrl)
-            .centerCrop()
-            .placeholder(R.drawable.poster_placeholder)
-            .into(holder.image)
+        try {
+            Glide.with(holder.image.context.applicationContext)
+                .load(top10Item.title.posterUrl)
+                .centerCrop()
+                .placeholder(R.drawable.poster_placeholder)
+                .into(holder.image)
+        } catch (_: Exception) {}
     }
     override fun onUnbindViewHolder(viewHolder: Presenter.ViewHolder) {
         val holder = viewHolder as ViewHolder
-        Glide.with(holder.image).clear(holder.image)
+        try {
+            Glide.with(holder.image.context.applicationContext).clear(holder.image)
+        } catch (_: Exception) {}
         holder.root.scaleX = 1.0f
         holder.root.scaleY = 1.0f
         holder.focusRing.alpha = 0f
