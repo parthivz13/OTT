@@ -1,7 +1,5 @@
-package com.example.ott.data.remote
-
+﻿package com.example.ott.data.remote
 import com.google.gson.annotations.SerializedName
-
 data class ShowDto(
     @SerializedName("id") val id: Int,
     @SerializedName("name") val name: String?,
@@ -13,11 +11,9 @@ data class ShowDto(
     @SerializedName("weight") val weight: Int?,
     @SerializedName("runtime") val runtime: Int?
 )
-
 data class RatingDto(
     @SerializedName("average") val average: Double?
 )
-
 data class ImageDto(
     @SerializedName("medium") val medium: String?,
     @SerializedName("original") val original: String?

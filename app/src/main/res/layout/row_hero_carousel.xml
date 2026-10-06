@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
@@ -8,8 +8,6 @@
     android:paddingBottom="12dp"
     android:clipChildren="false"
     android:clipToPadding="false">
-
-    <!-- Hero Carousel Stack Viewport -->
     <FrameLayout
         android:id="@+id/hero_stack"
         android:layout_width="match_parent"
@@ -18,16 +16,12 @@
         android:layout_marginEnd="0dp"
         android:clipChildren="false"
         android:clipToPadding="false">
-
-        <!-- Layered Card Container: Holds Active Card, Peek 1, Peek 2, and sliding buffer -->
         <FrameLayout
             android:id="@+id/hero_cards_container"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:clipChildren="false"
             android:clipToPadding="false" />
-
-        <!-- Active Slot Focus & Content Overlay (mirrors Active Card bounds) -->
         <FrameLayout
             android:id="@+id/hero_card"
             android:layout_width="match_parent"
@@ -38,16 +32,12 @@
             android:descendantFocusability="blocksDescendants"
             android:clipChildren="false"
             android:clipToPadding="false">
-
-            <!-- Crisp white rounded focus border (visible when hero carousel is focused) -->
             <View
                 android:id="@+id/hero_focus_border"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:background="@drawable/hero_focus_border"
                 android:alpha="0" />
-
-            <!-- Top-Left Content/Trending Badge -->
             <TextView
                 android:id="@+id/hero_badge"
                 android:layout_width="wrap_content"
@@ -65,8 +55,6 @@
                 android:letterSpacing="0.04"
                 android:visibility="gone"
                 tools:ignore="RtlSymmetry" />
-
-            <!-- Bottom Content Block: Title, Metadata, Synopsis -->
             <LinearLayout
                 android:id="@+id/hero_text_block"
                 android:layout_width="match_parent"
@@ -76,8 +64,6 @@
                 android:paddingStart="26dp"
                 android:paddingEnd="32dp"
                 android:paddingBottom="24dp">
-
-                <!-- Title -->
                 <TextView
                     android:id="@+id/hero_title"
                     android:layout_width="match_parent"
@@ -91,8 +77,6 @@
                     android:textColor="@color/white"
                     android:textSize="36sp"
                     android:textStyle="bold" />
-
-                <!-- Metadata Row with Rating & Quality Badges -->
                 <LinearLayout
                     android:id="@+id/hero_meta_row"
                     android:layout_width="match_parent"
@@ -100,7 +84,6 @@
                     android:layout_marginTop="8dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
-
                     <TextView
                         android:id="@+id/hero_content_rating"
                         android:layout_width="wrap_content"
@@ -116,7 +99,6 @@
                         android:textStyle="bold"
                         android:visibility="visible"
                         tools:ignore="RtlSymmetry" />
-
                     <TextView
                         android:id="@+id/hero_meta"
                         android:layout_width="wrap_content"
@@ -127,7 +109,6 @@
                         android:textColor="@color/hotstar_text_secondary"
                         android:textSize="14sp"
                         android:fontFamily="sans-serif-medium" />
-
                     <TextView
                         android:id="@+id/hero_quality_badge"
                         android:layout_width="wrap_content"
@@ -145,8 +126,6 @@
                         android:visibility="visible"
                         tools:ignore="RtlSymmetry" />
                 </LinearLayout>
-
-                <!-- Synopsis / Description -->
                 <TextView
                     android:id="@+id/hero_overview"
                     android:layout_width="match_parent"
@@ -157,8 +136,6 @@
                     android:lineSpacingMultiplier="1.15"
                     android:textColor="@color/hotstar_text_muted"
                     android:textSize="13.5sp" />
-
-                <!-- Optional Non-Focusable Visual Buttons (kept hidden for 100% JioHotstar parity) -->
                 <LinearLayout
                     android:id="@+id/hero_cta_row"
                     android:layout_width="wrap_content"
@@ -167,7 +144,6 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal"
                     android:visibility="gone">
-
                     <LinearLayout
                         android:id="@+id/hero_btn_watch"
                         android:layout_width="wrap_content"
@@ -179,14 +155,12 @@
                         android:paddingEnd="18dp"
                         android:focusable="false"
                         android:focusableInTouchMode="false">
-
                         <ImageView
                             android:layout_width="16dp"
                             android:layout_height="16dp"
                             android:src="@drawable/ic_play_arrow"
                             android:tint="@color/hotstar_btn_primary_text"
                             tools:ignore="UseAppTint" />
-
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
@@ -196,7 +170,6 @@
                             android:textSize="13sp"
                             android:textStyle="bold" />
                     </LinearLayout>
-
                     <LinearLayout
                         android:id="@+id/hero_btn_watchlist"
                         android:layout_width="wrap_content"
@@ -209,14 +182,12 @@
                         android:paddingEnd="16dp"
                         android:focusable="false"
                         android:focusableInTouchMode="false">
-
                         <ImageView
                             android:layout_width="16dp"
                             android:layout_height="16dp"
                             android:src="@drawable/ic_plus"
                             android:tint="@color/white"
                             tools:ignore="UseAppTint" />
-
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
@@ -230,8 +201,6 @@
             </LinearLayout>
         </FrameLayout>
     </FrameLayout>
-
-    <!-- Animated Capsule & Dot Indicator Strip -->
     <LinearLayout
         android:id="@+id/hero_dots"
         android:layout_width="wrap_content"

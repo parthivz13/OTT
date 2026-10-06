@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/card_root"
@@ -9,7 +9,6 @@
     android:focusableInTouchMode="true"
     android:clipChildren="false"
     android:clipToPadding="false">
-
     <androidx.cardview.widget.CardView
         android:id="@+id/card_surface"
         android:layout_width="match_parent"
@@ -17,33 +16,26 @@
         app:cardBackgroundColor="@color/hotstar_card_surface"
         app:cardCornerRadius="10dp"
         app:cardElevation="3dp">
-
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="match_parent">
-
-            <!-- Skeleton / Shimmer Background for dummy items -->
             <View
                 android:id="@+id/skeleton_bg"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:background="#202A38"
                 android:visibility="gone" />
-
             <ImageView
                 android:id="@+id/card_image"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:contentDescription="@null"
                 android:scaleType="centerCrop" />
-
             <View
                 android:layout_width="match_parent"
                 android:layout_height="60dp"
                 android:layout_gravity="bottom"
                 android:background="@drawable/card_bottom_scrim" />
-
-            <!-- Continue Watching Progress Bar -->
             <ProgressBar
                 android:id="@+id/card_progress"
                 style="?android:attr/progressBarStyleHorizontal"
@@ -57,8 +49,6 @@
                 android:visibility="gone" />
         </FrameLayout>
     </androidx.cardview.widget.CardView>
-
-    <!-- White focus border -->
     <View
         android:id="@+id/card_focus_ring"
         android:layout_width="match_parent"
@@ -66,8 +56,6 @@
         android:background="@drawable/card_focus_ring"
         android:elevation="14dp"
         android:alpha="0" />
-
-    <!-- External Title below card -->
     <TextView
         android:id="@+id/card_title"
         android:layout_width="match_parent"
@@ -79,5 +67,4 @@
         android:textColor="@color/white"
         android:textSize="13sp"
         android:fontFamily="sans-serif-medium" />
-
 </FrameLayout>

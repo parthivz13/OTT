@@ -3,8 +3,10 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#0B0E14">
-
-    <!-- Global Dynamic Backdrop for Center-stay Rails -->
+    <com.example.ott.ui.browse.DynamicAmbientBackdropView
+        android:id="@+id/dynamic_ambient_backdrop"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
     <ImageView
         android:id="@+id/iv_global_backdrop"
         android:layout_width="match_parent"
@@ -12,16 +14,12 @@
         android:scaleType="centerCrop"
         android:contentDescription="@null"
         android:alpha="0" />
-
-    <!-- Gradient Scrim overlay for readability -->
     <View
         android:id="@+id/view_backdrop_scrim"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="@drawable/hotstar_backdrop_scrim"
         android:alpha="0" />
-
-    <!-- Main Content Area -->
     <FrameLayout
         android:id="@+id/main_browse_fragment"
         android:layout_width="match_parent"
@@ -30,8 +28,6 @@
         android:layout_marginEnd="16dp"
         android:clipChildren="false"
         android:clipToPadding="false" />
-
-    <!-- Luxury Floating Glassmorphic Side Navigation -->
     <com.example.ott.ui.navigation.SideNavView
         android:id="@+id/side_nav_view"
         android:layout_width="68dp"
@@ -39,4 +35,3 @@
         android:clipChildren="false"
         android:clipToPadding="false" />
 </FrameLayout>
-

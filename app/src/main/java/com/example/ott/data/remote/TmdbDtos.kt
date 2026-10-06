@@ -1,12 +1,9 @@
-package com.example.ott.data.remote
-
+﻿package com.example.ott.data.remote
 import com.google.gson.annotations.SerializedName
-
 data class TrendingResponseDto(
     @SerializedName("page") val page: Int,
     @SerializedName("results") val results: List<TitleDto>
 )
-
 data class TitleDto(
     @SerializedName("id") val id: Int,
     @SerializedName("title") val title: String?,

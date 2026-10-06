@@ -1,5 +1,4 @@
-package com.example.ott.ui.navigation
-
+﻿package com.example.ott.ui.navigation
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Bitmap
@@ -18,41 +17,11 @@ import android.widget.TextView
 import androidx.annotation.DrawableRes
 import androidx.core.content.ContextCompat
 import com.example.ott.R
-
-/**
- * Self-contained, modular Side Navigation component designed for Android TV OTT applications,
- * faithfully replicating the JioHotstar navigation architecture with nested sub-items (e.g. TV, Movies,
- * Sports under Home) and strict D-pad remote control behavior.
- *
- * Features:
- * - Signature curved arch backdrop ([NavArchView]).
- * - Hierarchical parent/sub-item navigation structure:
- *     * In collapsed rail: Only root items are visible; sub-items collapse cleanly.
- *     * In expanded mode: Sub-items seamlessly expand with nested indentation under parent.
- *     * When a sub-item is active, the parent root icon reflects active state in collapsed rail.
- * - Dedicated [setTopImage] functions to dynamically set the top brand logo.
- * - Glassmorphic pills with custom gradient fill and strokes ([NavPillDrawable]).
- * - Smooth expansion/collapse width animations with animated label transitions.
- * - Fluid focus scale micro-interactions.
- * - Strict TV D-Pad handling:
- *     * When expanded: DPAD_UP, DPAD_DOWN, and DPAD_LEFT keep the sidebar open.
- *     * Closing ONLY occurs on item selection (DPAD_CENTER/ENTER/Click) or DPAD_RIGHT.
- *
- * Easy drop-in usage for any Android TV project:
- * ```xml
- * <com.example.ott.ui.navigation.SideNavView
- *     android:id="@+id/side_nav_view"
- *     android:layout_width="68dp"
- *     android:layout_height="match_parent" />
- * ```
- */
 class SideNavView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0
 ) : FrameLayout(context, attrs, defStyleAttr) {
-
-    /** Model representing a side navigation item (root or nested sub-item). */
     data class SideNavItem(
         val id: String,
         val title: String,
@@ -63,50 +32,39 @@ class SideNavView @JvmOverloads constructor(
         val subItems: List<SideNavItem> = emptyList(),
         val tag: Any? = null
     )
-
     private val density = resources.displayMetrics.density
     private var collapsedWidthPx = (COLLAPSED_WIDTH_DP * density).toInt()
     private var expandedWidthPx = (EXPANDED_WIDTH_DP * density).toInt()
-
     private var navExpanded = false
     private var widthAnimator: ValueAnimator? = null
-
     private var selectedItemId: String? = null
     private var selectedPillView: View? = null
     private var selectedIndicatorView: View? = null
-
     private var onItemSelectedListener: ((SideNavItem) -> Unit)? = null
     private var onNavStateChangeListener: ((isExpanded: Boolean) -> Unit)? = null
     private var onRightExitListener: (() -> Boolean)? = null
-
     private val navArchView: NavArchView
     private val mainContentLayout: LinearLayout
     private val topBrandImageView: ImageView
-    private val topItemsContainer: LinearLayout
+    private val centerItemsContainer: LinearLayout
     private val bottomItemsContainer: LinearLayout
-
     private val itemViewsMap = mutableMapOf<String, ItemViewHolder>()
     private val allFlatItems = mutableListOf<SideNavItem>()
-
     private class ItemViewHolder(
         val item: SideNavItem,
         val pillView: FrameLayout,
         val indicatorView: View,
         val iconView: ImageView,
-        val labelView: TextView
+        val labelView: TextView,
+        @DrawableRes val originalIconRes: Int
     )
-
     init {
         clipChildren = false
         clipToPadding = false
-
-        // 1. Curved Glassmorphic Arch Backdrop
         navArchView = NavArchView(context).apply {
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
         }
         addView(navArchView)
-
-        // 2. Main vertical layout
         mainContentLayout = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
@@ -118,13 +76,10 @@ class SideNavView @JvmOverloads constructor(
             clipToPadding = false
         }
         addView(mainContentLayout)
-
-        // 3. Top Brand Image / Logo
         val brandSize = (24f * density).toInt()
         val brandMarginStart = (12f * density).toInt()
         val brandMarginTop = (2f * density).toInt()
-        val brandMarginBottom = (16f * density).toInt()
-
+        val brandMarginBottom = (4f * density).toInt()
         topBrandImageView = ImageView(context).apply {
             id = View.generateViewId()
             layoutParams = LinearLayout.LayoutParams(brandSize, brandSize).apply {
@@ -140,23 +95,21 @@ class SideNavView @JvmOverloads constructor(
             }
         }
         mainContentLayout.addView(topBrandImageView)
-
-        // 4. Top Menu Items Container
-        topItemsContainer = LinearLayout(context).apply {
+        val topSpacer = View(context).apply {
+            layoutParams = LinearLayout.LayoutParams(0, 0, 1.0f)
+        }
+        mainContentLayout.addView(topSpacer)
+        centerItemsContainer = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
             clipChildren = false
             clipToPadding = false
         }
-        mainContentLayout.addView(topItemsContainer)
-
-        // 5. Flexible Spacer to push bottom item(s) to the bottom
-        val spacer = View(context).apply {
+        mainContentLayout.addView(centerItemsContainer)
+        val bottomSpacer = View(context).apply {
             layoutParams = LinearLayout.LayoutParams(0, 0, 1.0f)
         }
-        mainContentLayout.addView(spacer)
-
-        // 6. Bottom Menu Items Container
+        mainContentLayout.addView(bottomSpacer)
         bottomItemsContainer = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
@@ -165,264 +118,187 @@ class SideNavView @JvmOverloads constructor(
         }
         mainContentLayout.addView(bottomItemsContainer)
     }
-
-    // =========================================================================
-    // Public APIs
-    // =========================================================================
-
-    /**
-     * Set the top side brand image / logo directly via Drawable resource ID.
-     */
     fun setTopImage(@DrawableRes resId: Int) {
         topBrandImageView.setImageResource(resId)
         topBrandImageView.visibility = View.VISIBLE
     }
-
-    /**
-     * Set the top side brand image / logo directly via Drawable.
-     */
     fun setTopImage(drawable: Drawable?) {
         topBrandImageView.setImageDrawable(drawable)
         topBrandImageView.visibility = if (drawable != null) View.VISIBLE else View.GONE
     }
-
-    /**
-     * Set the top side brand image / logo directly via Bitmap.
-     */
     fun setTopImageBitmap(bitmap: Bitmap?) {
         topBrandImageView.setImageBitmap(bitmap)
         topBrandImageView.visibility = if (bitmap != null) View.VISIBLE else View.GONE
     }
-
-    /**
-     * Controls visibility of the top side image / logo.
-     */
     fun setTopImageVisible(visible: Boolean) {
         topBrandImageView.visibility = if (visible) View.VISIBLE else View.GONE
     }
-
-    /**
-     * Get the top side ImageView for advanced customizations.
-     */
     fun getTopImageView(): ImageView = topBrandImageView
-
-    /**
-     * Set all navigation items dynamically with support for nested sub-items.
-     */
     fun setItems(items: List<SideNavItem>) {
         allFlatItems.clear()
-        topItemsContainer.removeAllViews()
+        centerItemsContainer.removeAllViews()
         bottomItemsContainer.removeAllViews()
         itemViewsMap.clear()
-
         fun addRecursive(item: SideNavItem, isSub: Boolean = false, parentId: String? = null) {
             val normalized = item.copy(isSubItem = isSub, parentId = parentId)
             allFlatItems.add(normalized)
             val holder = createItemViewHolder(normalized)
             itemViewsMap[normalized.id] = holder
-
             if (normalized.isBottomItem) {
                 bottomItemsContainer.addView(holder.pillView)
             } else {
-                topItemsContainer.addView(holder.pillView)
+                centerItemsContainer.addView(holder.pillView)
             }
-
             item.subItems.forEach { sub ->
                 addRecursive(sub, isSub = true, parentId = item.id)
             }
         }
-
         items.forEach { item ->
             addRecursive(item, isSub = item.isSubItem, parentId = item.parentId)
         }
-
-        // Re-apply selection or default
         if (selectedItemId != null && itemViewsMap.containsKey(selectedItemId)) {
             setSelectedItemId(selectedItemId, triggerCallback = false)
         } else if (allFlatItems.isNotEmpty()) {
             val defaultItem = allFlatItems.firstOrNull { it.id == "home" } ?: allFlatItems.first()
             setSelectedItemId(defaultItem.id, triggerCallback = false)
         }
-
-        updateSubItemsVisibility()
+        updateInitialState()
     }
-
-    /**
-     * Set active selected item by ID.
-     */
     fun setSelectedItemId(id: String?, triggerCallback: Boolean = false) {
         selectedItemId = id
         val targetHolder = id?.let { itemViewsMap[it] }
-
-        // Deselect previous
-        selectedPillView?.isSelected = false
-        selectedIndicatorView?.visibility = View.INVISIBLE
-        val oldPill = selectedPillView
-
+        itemViewsMap.values.forEach { holder ->
+            holder.pillView.isSelected = false
+            holder.indicatorView.visibility = View.INVISIBLE
+            holder.pillView.invalidate()
+        }
         if (targetHolder != null) {
             targetHolder.pillView.isSelected = true
-            targetHolder.indicatorView.visibility = View.VISIBLE
             selectedPillView = targetHolder.pillView
             selectedIndicatorView = targetHolder.indicatorView
-
-            oldPill?.invalidate()
-            targetHolder.pillView.invalidate()
-
-            // If a sub-item is selected, ensure parent root item reflects active state when collapsed
-            val parentId = targetHolder.item.parentId
-            if (parentId != null) {
-                itemViewsMap[parentId]?.pillView?.invalidate()
+            val item = targetHolder.item
+            if (item.isSubItem && item.parentId != null) {
+                val parentHolder = itemViewsMap[item.parentId]
+                if (navExpanded) {
+                    parentHolder?.iconView?.setImageResource(parentHolder.originalIconRes)
+                    parentHolder?.pillView?.isSelected = false
+                    parentHolder?.indicatorView?.visibility = View.INVISIBLE
+                    targetHolder.indicatorView.visibility = View.VISIBLE
+                } else {
+                    parentHolder?.iconView?.setImageResource(item.iconRes)
+                    parentHolder?.pillView?.isSelected = true
+                    parentHolder?.indicatorView?.visibility = View.VISIBLE
+                    targetHolder.indicatorView.visibility = View.INVISIBLE
+                }
+                parentHolder?.pillView?.invalidate()
+            } else {
+                targetHolder.iconView.setImageResource(targetHolder.originalIconRes)
+                targetHolder.indicatorView.visibility = View.VISIBLE
+                itemViewsMap.values.filter { !it.item.isSubItem }.forEach { rootHolder ->
+                    if (rootHolder !== targetHolder) {
+                        rootHolder.iconView.setImageResource(rootHolder.originalIconRes)
+                    }
+                }
             }
-
+            targetHolder.pillView.invalidate()
             if (triggerCallback) {
                 onItemSelectedListener?.invoke(targetHolder.item)
             }
         }
     }
-
-    /**
-     * Get currently selected item ID.
-     */
     fun getSelectedItemId(): String? = selectedItemId
-
-    /**
-     * Get currently selected item.
-     */
     fun getSelectedItem(): SideNavItem? = selectedItemId?.let { id -> allFlatItems.firstOrNull { it.id == id } }
-
-    /**
-     * Register a callback to be invoked when an item is selected.
-     */
     fun setOnItemSelectedListener(listener: (SideNavItem) -> Unit) {
         this.onItemSelectedListener = listener
     }
-
-    /**
-     * Register a callback to be invoked when navigation expands or collapses.
-     */
     fun setOnNavStateChangeListener(listener: (isExpanded: Boolean) -> Unit) {
         this.onNavStateChangeListener = listener
     }
-
-    /**
-     * Register a callback to be invoked when user presses DPAD_RIGHT from within the sidebar.
-     * Return true if handled (e.g. focused content grid), false to let system handle focus.
-     */
     fun setOnRightExitListener(listener: () -> Boolean) {
         this.onRightExitListener = listener
     }
-
-    /**
-     * Request focus on the active selected nav item (or first focusable item).
-     */
     fun focusSelectedNavItem(): Boolean {
-        var target = selectedPillView
-        if (target != null && target.visibility == View.VISIBLE) {
-            return target.requestFocus()
-        }
-        // If target is a hidden sub-item in collapsed state, focus its parent root item
+        openSideNav()
         val curItem = getSelectedItem()
-        if (curItem?.parentId != null) {
-            val parentHolder = itemViewsMap[curItem.parentId]
-            if (parentHolder?.pillView?.visibility == View.VISIBLE) {
-                return parentHolder.pillView.requestFocus()
-            }
+        val targetHolder = curItem?.id?.let { itemViewsMap[it] }
+        if (targetHolder != null && targetHolder.pillView.visibility == View.VISIBLE) {
+            return targetHolder.pillView.requestFocus()
         }
-        val firstChild = topItemsContainer.getChildAt(0)
+        val firstChild = centerItemsContainer.getChildAt(0)
         return firstChild?.requestFocus() ?: false
     }
-
-    /**
-     * Whether the sidebar is currently in expanded mode.
-     */
+    override fun onRequestFocusInDescendants(direction: Int, previouslyFocusedRect: android.graphics.Rect?): Boolean {
+        if (!navExpanded) {
+            openSideNav()
+        }
+        val curItem = getSelectedItem()
+        val targetHolder = curItem?.id?.let { itemViewsMap[it] }
+        if (targetHolder != null && targetHolder.pillView.visibility == View.VISIBLE) {
+            return targetHolder.pillView.requestFocus(direction, previouslyFocusedRect)
+        }
+        return super.onRequestFocusInDescendants(direction, previouslyFocusedRect)
+    }
     fun isExpanded(): Boolean = navExpanded
-
-    /**
-     * Check if focus is currently within this sidebar.
-     */
     fun isNavFocused(): Boolean {
         val f = findFocus()
         return f != null && (f === this || isNavDescendant(f))
     }
-
-    /**
-     * Open (expand) the sidebar.
-     */
     fun openSideNav() {
         if (!navExpanded) {
             navExpanded = true
-            updateSubItemsVisibility()
+            handleOpenAnimation()
             animateNavWidth(EXPANDED_WIDTH_DP)
-            animateAllLabels(true)
             onNavStateChangeListener?.invoke(true)
         }
     }
-
-    /**
-     * Close (collapse) the sidebar.
-     */
     fun closeSideNav() {
         if (navExpanded) {
             navExpanded = false
+            handleCloseAnimation()
             animateNavWidth(COLLAPSED_WIDTH_DP)
-            animateAllLabels(false)
             onNavStateChangeListener?.invoke(false)
         }
     }
-
-    /**
-     * Toggle sidebar expansion state.
-     */
     fun toggleSideNav() {
         if (navExpanded) closeSideNav() else openSideNav()
     }
-
-    // =========================================================================
-    // Strict D-Pad Key Handling
-    // =========================================================================
-
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) {
             when (event.keyCode) {
                 KeyEvent.KEYCODE_DPAD_UP -> {
-                    // Navigate to previous item in the sidebar; do NOT close the sidebar!
                     val current = findFocus()
                     if (current != null && isNavDescendant(current)) {
                         val prev = findNextItemFocus(current, isUp = true)
                         if (prev != null) {
                             prev.requestFocus()
                         }
-                        return true // Consumed: sidebar stays open
+                        return true 
                     }
                 }
                 KeyEvent.KEYCODE_DPAD_DOWN -> {
-                    // Navigate to next item in the sidebar; do NOT close the sidebar!
                     val current = findFocus()
                     if (current != null && isNavDescendant(current)) {
                         val next = findNextItemFocus(current, isUp = false)
                         if (next != null) {
                             next.requestFocus()
                         }
-                        return true // Consumed: sidebar stays open
+                        return true 
                     }
                 }
                 KeyEvent.KEYCODE_DPAD_LEFT -> {
-                    // Already at leftmost side: do NOT close or lose focus!
                     val current = findFocus()
                     if (current != null && isNavDescendant(current)) {
-                        return true // Consumed: prevent sidebar collapse
+                        return true 
                     }
                 }
                 KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                    // Moving RIGHT from expanded sidebar:
-                    // ONLY here and on item select should the sidebar close!
                     val current = findFocus()
                     if (current != null && isNavDescendant(current)) {
                         closeSideNav()
                         if (onRightExitListener?.invoke() == true) {
                             return true
                         }
-                        return false // Let focus move to right content naturally
+                        return false 
                     }
                 }
                 KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
@@ -436,16 +312,9 @@ class SideNavView @JvmOverloads constructor(
         }
         return super.dispatchKeyEvent(event)
     }
-
-    // =========================================================================
-    // Internal Item Construction & Animation
-    // =========================================================================
-
     private fun createItemViewHolder(item: SideNavItem): ItemViewHolder {
         val pillHeight = (if (item.isSubItem) 38f else 44f) * density
         val pillMarginBottom = (if (item.isSubItem) 4f else 6f) * density
-
-        // 1. Pill container FrameLayout
         val pill = FrameLayout(context).apply {
             id = View.generateViewId()
             isFocusable = true
@@ -453,7 +322,6 @@ class SideNavView @JvmOverloads constructor(
             clipChildren = false
             clipToPadding = false
             background = NavPillDrawable(context)
-
             layoutParams = LinearLayout.LayoutParams(
                 LayoutParams.MATCH_PARENT,
                 pillHeight.toInt()
@@ -461,12 +329,9 @@ class SideNavView @JvmOverloads constructor(
                 bottomMargin = pillMarginBottom.toInt()
             }
         }
-
-        // 2. Cyan Active Indicator Line
         val indicatorWidth = (3f * density).toInt()
         val indicatorHeight = (if (item.isSubItem) 12f else 16f) * density
         val indicatorMarginStart = (if (item.isSubItem) 18f else 2f) * density
-
         val indicator = View(context).apply {
             id = View.generateViewId()
             val indRes = context.resources.getIdentifier("nav_active_indicator", "drawable", context.packageName)
@@ -482,8 +347,6 @@ class SideNavView @JvmOverloads constructor(
             }
         }
         pill.addView(indicator)
-
-        // 3. Content horizontal row
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -494,13 +357,9 @@ class SideNavView @JvmOverloads constructor(
                 gravity = Gravity.START or Gravity.CENTER_VERTICAL
             }
         }
-
-        // 4. Icon
         val iconSize = (if (item.isSubItem) 20f else 24f) * density
-        // Indentation for nested sub-items (e.g. TV, Movies, Sports under Home) exactly like JioHotstar
         val iconMarginStart = (if (item.isSubItem) 28f else 12f) * density
         val iconMarginEnd = (if (item.isSubItem) 10f else 12f) * density
-
         val iconView = ImageView(context).apply {
             id = View.generateViewId()
             setImageResource(item.iconRes)
@@ -517,11 +376,8 @@ class SideNavView @JvmOverloads constructor(
             }
         }
         row.addView(iconView)
-
-        // 5. Label
         val labelMarginStart = (4f * density).toInt()
         val labelMarginEnd = (16f * density).toInt()
-
         val labelView = TextView(context).apply {
             id = View.generateViewId()
             text = item.title
@@ -543,48 +399,126 @@ class SideNavView @JvmOverloads constructor(
         }
         row.addView(labelView)
         pill.addView(row)
-
-        // Micro-interactions & Focus Handlers
         pill.setOnFocusChangeListener { v, hasFocus ->
             v.animate()
                 .scaleX(if (hasFocus) 1.04f else 1.0f)
                 .scaleY(if (hasFocus) 1.04f else 1.0f)
                 .setDuration(160)
                 .start()
-
             if (hasFocus) {
                 openSideNav()
             }
         }
-
-        // Click / Enter: Select item & CLOSE sidebar
         pill.setOnClickListener {
             setSelectedItemId(item.id, triggerCallback = true)
             closeSideNav()
         }
-
-        return ItemViewHolder(item, pill, indicator, iconView, labelView)
+        return ItemViewHolder(item, pill, indicator, iconView, labelView, item.iconRes)
     }
-
-    private fun updateSubItemsVisibility() {
+    private fun updateInitialState() {
         itemViewsMap.values.forEach { holder ->
             if (holder.item.isSubItem) {
                 holder.pillView.visibility = if (navExpanded) View.VISIBLE else View.GONE
             }
         }
     }
-
+    private fun handleOpenAnimation() {
+        val curItem = getSelectedItem()
+        val isSubItemSelected = curItem?.isSubItem == true
+        if (isSubItemSelected) {
+            val parentId = curItem?.parentId
+            if (parentId != null) {
+                val parentHolder = itemViewsMap[parentId]
+                parentHolder?.iconView?.setImageResource(parentHolder.originalIconRes)
+                parentHolder?.indicatorView?.visibility = View.INVISIBLE
+                parentHolder?.pillView?.isSelected = false
+                parentHolder?.pillView?.invalidate()
+            }
+            itemViewsMap.values.forEach { holder ->
+                if (holder.item.isSubItem) {
+                    holder.pillView.visibility = View.VISIBLE
+                    holder.pillView.translationY = 0f
+                    holder.pillView.alpha = 0f
+                    holder.pillView.animate().cancel()
+                    holder.pillView.animate()
+                        .alpha(1f)
+                        .setStartDelay(80L)   
+                        .setDuration(140L)
+                        .start()
+                }
+            }
+            val targetHolder = curItem?.id?.let { itemViewsMap[it] }
+            targetHolder?.pillView?.isSelected = true
+            targetHolder?.indicatorView?.visibility = View.VISIBLE
+            targetHolder?.pillView?.invalidate()
+            animateAllLabels(show = true, slideAmount = 6f, startDelay = 80L)
+        } else {
+            itemViewsMap.values.filter { !it.item.isSubItem }.forEach { rootHolder ->
+                rootHolder.iconView.setImageResource(rootHolder.originalIconRes)
+            }
+            var subIndex = 0
+            itemViewsMap.values.forEach { holder ->
+                if (holder.item.isSubItem) {
+                    holder.pillView.visibility = View.VISIBLE
+                    holder.pillView.translationY = -(10f * density)
+                    holder.pillView.alpha = 0f
+                    holder.pillView.animate().cancel()
+                    holder.pillView.animate()
+                        .translationY(0f)
+                        .alpha(1f)
+                        .setStartDelay(60L + subIndex * 40L)
+                        .setDuration(220L)
+                        .setInterpolator(DecelerateInterpolator(2.0f))
+                        .start()
+                    subIndex++
+                }
+            }
+            animateAllLabels(show = true, slideAmount = 6f, startDelay = 40L)
+        }
+    }
+    private fun handleCloseAnimation() {
+        val curItem = getSelectedItem()
+        val isSubItemSelected = curItem?.isSubItem == true
+        itemViewsMap.values.forEach { holder ->
+            if (holder.item.isSubItem) {
+                holder.pillView.animate().cancel()
+                holder.pillView.animate()
+                    .alpha(0f)
+                    .setDuration(120L)
+                    .withEndAction {
+                        holder.pillView.visibility = View.GONE
+                        holder.pillView.alpha = 1f  
+                        if (isSubItemSelected && holder.item.id == curItem?.id) {
+                            holder.indicatorView.visibility = View.INVISIBLE
+                        }
+                    }
+                    .start()
+            }
+        }
+        if (isSubItemSelected) {
+            val parentId = curItem?.parentId
+            if (parentId != null) {
+                val parentHolder = itemViewsMap[parentId]
+                parentHolder?.pillView?.postDelayed({
+                    parentHolder.iconView.setImageResource(curItem.iconRes)
+                    parentHolder.indicatorView.visibility = View.VISIBLE
+                    parentHolder.pillView.isSelected = true
+                    parentHolder.pillView.invalidate()
+                }, 100L)
+            }
+        }
+        animateAllLabels(show = false)
+    }
     private fun findNextItemFocus(currentFocus: View, isUp: Boolean): View? {
         val visiblePills = mutableListOf<View>()
-        for (i in 0 until topItemsContainer.childCount) {
-            val child = topItemsContainer.getChildAt(i)
+        for (i in 0 until centerItemsContainer.childCount) {
+            val child = centerItemsContainer.getChildAt(i)
             if (child.visibility == View.VISIBLE) visiblePills.add(child)
         }
         for (i in 0 until bottomItemsContainer.childCount) {
             val child = bottomItemsContainer.getChildAt(i)
             if (child.visibility == View.VISIBLE) visiblePills.add(child)
         }
-
         var currentIndex = -1
         for (i in visiblePills.indices) {
             val p = visiblePills[i]
@@ -593,13 +527,10 @@ class SideNavView @JvmOverloads constructor(
                 break
             }
         }
-
         if (currentIndex == -1) return null
-
         val targetIndex = if (isUp) currentIndex - 1 else currentIndex + 1
         return if (targetIndex in visiblePills.indices) visiblePills[targetIndex] else null
     }
-
     private fun isViewInside(child: View, parent: View): Boolean {
         var p = child.parent
         while (p != null) {
@@ -608,7 +539,6 @@ class SideNavView @JvmOverloads constructor(
         }
         return false
     }
-
     private fun isNavDescendant(view: View): Boolean {
         var parent = view.parent
         while (parent != null) {
@@ -617,40 +547,46 @@ class SideNavView @JvmOverloads constructor(
         }
         return false
     }
-
-    private fun animateAllLabels(show: Boolean) {
+    private fun animateAllLabels(show: Boolean, slideAmount: Float = 6f, startDelay: Long = 0L) {
         itemViewsMap.values.forEach { holder ->
             val label = holder.labelView
             label.animate().cancel()
             if (show) {
                 label.visibility = View.VISIBLE
-                label.translationX = -12f
+                label.translationX = -slideAmount
+                label.alpha = 0f
                 label.animate()
                     .alpha(1f)
                     .translationX(0f)
-                    .setDuration(NAV_ANIM_DURATION)
+                    .setStartDelay(startDelay)
+                    .setDuration(180L)
+                    .setInterpolator(DecelerateInterpolator(1.5f))
                     .start()
             } else {
                 label.animate()
                     .alpha(0f)
-                    .translationX(-8f)
-                    .setDuration(NAV_ANIM_DURATION)
+                    .translationX(-slideAmount)
+                    .setStartDelay(0L)
+                    .setDuration(120L)
                     .withEndAction {
                         label.visibility = View.GONE
-                        updateSubItemsVisibility()
+                        label.translationX = 0f
+                        if (!navExpanded) {
+                            updateInitialState()
+                        }
                     }
                     .start()
             }
         }
     }
-
     private fun animateNavWidth(targetDp: Int) {
         widthAnimator?.cancel()
         val startPx = width.takeIf { it > 0 } ?: (COLLAPSED_WIDTH_DP * density).toInt()
         val endPx = (targetDp * density).toInt()
+        val isExpanding = endPx > startPx
         widthAnimator = ValueAnimator.ofInt(startPx, endPx).apply {
-            duration = NAV_ANIM_DURATION
-            interpolator = DecelerateInterpolator(1.8f)
+            duration = if (isExpanding) 210L else 180L
+            interpolator = if (isExpanding) DecelerateInterpolator(2.2f) else DecelerateInterpolator(2.0f)
             addUpdateListener { anim ->
                 layoutParams = layoutParams.apply {
                     width = anim.animatedValue as Int
@@ -660,7 +596,6 @@ class SideNavView @JvmOverloads constructor(
             start()
         }
     }
-
     companion object {
         const val COLLAPSED_WIDTH_DP = 68
         const val EXPANDED_WIDTH_DP = 226

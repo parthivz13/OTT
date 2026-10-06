@@ -1,5 +1,4 @@
 package com.example.ott.sott.presenter
-
 import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Bundle
@@ -50,7 +49,6 @@ import com.example.ott.sott.models.CustomKalturaAsset
 import com.example.ott.sott.utils.AppCommonMethod
 import com.example.ott.sott.utils.constants.AppConstants
 import com.example.ott.ui.browse.MainActivity
-
 enum class ScreenType {
     CONNECT_PHONE,
     SEARCH,
@@ -61,27 +59,20 @@ enum class ScreenType {
     CATEGORIES,
     MY_SPACE
 }
-
 class ListFragment : RowsSupportFragment() {
-
     private var onItemInteractionListener: OnItemInteractionListener? = null
     private val homeRepository = HomeScreenRepository()
-
     fun setOnItemInteractionListener(listener: OnItemInteractionListener) {
         onItemInteractionListener = listener
     }
-
     val hashMap = HashMap<String, NavigationInfoModel>()
-
     private val listRowPresenter = object : ListRowPresenter(FocusHighlight.ZOOM_FACTOR_NONE) {
         override fun isUsingDefaultListSelectEffect() = false
-
         @SuppressLint("RestrictedApi")
         override fun createRowViewHolder(parent: ViewGroup): RowPresenter.ViewHolder {
             val viewHolder = super.createRowViewHolder(parent)
             val rowView = viewHolder.view as ListRowView
             val gridView = rowView.gridView
-
             gridView.itemAnimator = null
             gridView.setSaveChildrenPolicy(BaseGridView.SAVE_NO_CHILD)
             gridView.setFocusScrollStrategy(BaseGridView.FOCUS_SCROLL_ITEM)
@@ -91,13 +82,11 @@ class ListFragment : RowsSupportFragment() {
             gridView.itemAnimator = SmoothGridItemAnimator()
             return viewHolder
         }
-
         override fun initializeRowViewHolder(holder: RowPresenter.ViewHolder) {
             super.initializeRowViewHolder(holder)
             val listRowHolder = holder as? ListRowPresenter.ViewHolder ?: return
             val gridView = listRowHolder.gridView
             val density = gridView.resources.displayMetrics.density
-
             gridView.windowAlignment = BaseGridView.WINDOW_ALIGN_BOTH_EDGE
             gridView.windowAlignmentOffset = (17 * density).toInt()
             gridView.windowAlignmentOffsetPercent = BaseGridView.WINDOW_ALIGN_OFFSET_PERCENT_DISABLED
@@ -106,13 +95,11 @@ class ListFragment : RowsSupportFragment() {
             listRowHolder.view.setPadding(0, listRowHolder.view.paddingTop, listRowHolder.view.paddingRight, listRowHolder.view.paddingBottom)
             gridView.setPadding(0, gridView.paddingTop, gridView.paddingRight, gridView.paddingBottom)
         }
-
         override fun onBindRowViewHolder(holder: RowPresenter.ViewHolder, item: Any) {
             super.onBindRowViewHolder(holder, item)
             val listRowHolder = holder as? ListRowPresenter.ViewHolder ?: return
             val gridView = listRowHolder.gridView
             val density = gridView.resources.displayMetrics.density
-
             gridView.windowAlignment = BaseGridView.WINDOW_ALIGN_BOTH_EDGE
             gridView.windowAlignmentOffset = (17 * density).toInt()
             gridView.windowAlignmentOffsetPercent = BaseGridView.WINDOW_ALIGN_OFFSET_PERCENT_DISABLED
@@ -126,28 +113,22 @@ class ListFragment : RowsSupportFragment() {
         selectEffectEnabled = false
         headerPresenter = IconHeaderItemPresenter()
     }
-
     private val heroCarouselRowPresenter = HeroCarouselRowPresenter()
-    // Movies carousel: standard expandable behaviour (last card collapses when focus leaves)
     private val expandableHeroRowPresenter = ExpandableHeroCarouselRowPresenter(
         keepExpandedWhenUnfocused = false
     ).apply {
         headerPresenter = IconHeaderItemPresenter()
     }
-
     var currentScreenType = ScreenType.HOME
         private set
-
     private fun isHeroCarousel(screenWidget: BaseCategory?): Boolean {
         return currentScreenType == ScreenType.HOME &&
             (screenWidget?.Id == "widget_hero" || (screenWidget?.type == "CAROUSEL" && (screenWidget.displayOrder ?: 0) == 0))
     }
-
     private val presenterSelector = object : PresenterSelector() {
         override fun getPresenters(): Array<Presenter> {
             return arrayOf(heroCarouselRowPresenter, expandableHeroRowPresenter, listRowPresenter)
         }
-
         override fun getPresenter(item: Any?): Presenter {
             if (item is ExpandableHeroCarouselRow) {
                 return expandableHeroRowPresenter
@@ -157,7 +138,6 @@ class ListFragment : RowsSupportFragment() {
             val railCommonData = hashMap[widgetId]?.railCommonData
             val railType = railCommonData?.railType
             val screenWidget = railCommonData?.screenWidget
-
             return when {
                 railType == RailTypes.CAROUSEL_LDS_LANDSCAPE -> {
                     if (isHeroCarousel(screenWidget)) {
@@ -170,16 +150,13 @@ class ListFragment : RowsSupportFragment() {
             }
         }
     }
-
     val rowsAdapter = ArrayObjectAdapter(presenterSelector)
-
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         adapter = rowsAdapter
         verticalGridView?.itemAnimator = SmoothGridItemAnimator()
         setOnItemViewSelectedListener(ItemViewSelectedListener())
         setOnItemViewClickedListener(ItemViewClickListener())
-
         val alignmentPx = resources.getDimensionPixelSize(R.dimen.row_alignment_offset)
         val density = resources.displayMetrics.density
         verticalGridView?.apply {
@@ -190,12 +167,9 @@ class ListFragment : RowsSupportFragment() {
             itemAlignmentOffsetPercent = 0f
             setItemSpacing((8 * density).toInt())
         }
-
         setupInstantVerticalNavigation()
-
         loadHomeScreenRails()
     }
-
     fun loadTab(screenType: ScreenType) {
         currentScreenType = screenType
         when (screenType) {
@@ -206,12 +180,9 @@ class ListFragment : RowsSupportFragment() {
             }
         }
     }
-
     fun loadHomeScreenRails() {
         currentScreenType = ScreenType.HOME
         resetForNewMenu()
-
-        // 1. Fetch screen configurations
         val configs = homeRepository.getHomeScreenRailConfigs()
         val dummyRails = configs.map { (category, railType) ->
             RailCommonData(
@@ -220,12 +191,8 @@ class ListFragment : RowsSupportFragment() {
                 assets = ArrayList()
             )
         }
-
-        // 2. Set expected count and build 10 dummy items per rail immediately
         setExpectedRailCount(dummyRails.size)
         appendData(dummyRails)
-
-        // 3. Launch independent asynchronous API call for each rail
         configs.forEach { (category, railType) ->
             viewLifecycleOwner.lifecycleScope.launch {
                 val railData = homeRepository.fetchRailData(category, railType)
@@ -233,11 +200,9 @@ class ListFragment : RowsSupportFragment() {
             }
         }
     }
-
     fun loadMovieScreenRails() {
         currentScreenType = ScreenType.MOVIES
         resetForNewMenu()
-
         val configs = homeRepository.getMovieScreenRailConfigs()
         val dummyRails = configs.map { (category, railType) ->
             RailCommonData(
@@ -246,10 +211,8 @@ class ListFragment : RowsSupportFragment() {
                 assets = ArrayList()
             )
         }
-
         setExpectedRailCount(dummyRails.size)
         appendData(dummyRails)
-
         configs.forEach { (category, railType) ->
             viewLifecycleOwner.lifecycleScope.launch {
                 val railData = homeRepository.fetchMovieRailData(category, railType)
@@ -257,7 +220,6 @@ class ListFragment : RowsSupportFragment() {
             }
         }
     }
-
     fun isCenterStayRail(row: Row?, railCommonData: RailCommonData?): Boolean {
         if (row is ExpandableHeroCarouselRow) return false
         val screenWidget = railCommonData?.screenWidget
@@ -267,7 +229,6 @@ class ListFragment : RowsSupportFragment() {
         if (screenWidget?.railCardType.equals("EXPANDED", ignoreCase = true)) return false
         return true
     }
-
     private fun updateDynamicBackdrop(item: Any?) {
         val imageUrl = when (item) {
             is Title -> item.backdropUrl ?: item.posterUrl
@@ -282,8 +243,8 @@ class ListFragment : RowsSupportFragment() {
             else -> null
         }
         (activity as? MainActivity)?.updateGlobalBackdrop(imageUrl)
+        (activity as? MainActivity)?.updateAmbientColorFromImage(imageUrl, fallbackId = item)
     }
-
     fun updateRowAlignment(hasBrandingLogo: Boolean, railCommonData: RailCommonData?) {
         val isCenter = isCenterStayRail(null, railCommonData)
         if (isCenter) {
@@ -301,12 +262,10 @@ class ListFragment : RowsSupportFragment() {
             verticalGridView?.windowAlignmentOffset = alignment
         }
     }
-
     private fun setupInstantVerticalNavigation() {
         verticalGridView?.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         verticalGridView?.setOnKeyInterceptListener { event ->
             if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyInterceptListener false
-
             when (event.keyCode) {
                 KeyEvent.KEYCODE_DPAD_UP -> jumpToRow(selectedPosition - 1)
                 KeyEvent.KEYCODE_DPAD_DOWN -> jumpToRow(selectedPosition + 1)
@@ -314,18 +273,14 @@ class ListFragment : RowsSupportFragment() {
             }
         }
     }
-
     private fun jumpToRow(targetPosition: Int): Boolean {
         if (targetPosition < 0 || targetPosition >= rowsAdapter.size()) return false
-
         val gridView = verticalGridView ?: return false
-
         val row = rowsAdapter.get(targetPosition) as? Row
         val key = (row as? ListRow)?.contentDescription?.toString()
         val railCommonData = hashMap[key]?.railCommonData
         val isCenter = isCenterStayRail(row, railCommonData)
         val alignmentPx = resources.getDimensionPixelSize(R.dimen.row_alignment_offset)
-
         if (isCenter) {
             gridView.windowAlignmentOffsetPercent = 42f
             gridView.windowAlignmentOffset = 0
@@ -333,9 +288,7 @@ class ListFragment : RowsSupportFragment() {
             gridView.windowAlignmentOffsetPercent = BaseGridView.WINDOW_ALIGN_OFFSET_PERCENT_DISABLED
             gridView.windowAlignmentOffset = if (isHeroCarousel(railCommonData?.screenWidget)) 0 else alignmentPx
         }
-
         setSelectedPosition(targetPosition)
-
         gridView.post {
             val holder = gridView.findViewHolderForAdapterPosition(targetPosition)
             if (holder is ListRowPresenter.ViewHolder) {
@@ -357,10 +310,8 @@ class ListFragment : RowsSupportFragment() {
                 }
             }
         }
-
         return true
     }
-
     fun requestChildFocus(): Boolean {
         val gridView = verticalGridView ?: return false
         val holder = gridView.findViewHolderForAdapterPosition(selectedPosition)
@@ -373,7 +324,6 @@ class ListFragment : RowsSupportFragment() {
         }
         return holder?.itemView?.requestFocus() ?: gridView.requestFocus()
     }
-
     fun resetForNewMenu() {
         if (!isAdded) return
         HeroCarouselRowPresenter.stopActiveVideo()
@@ -388,18 +338,14 @@ class ListFragment : RowsSupportFragment() {
         expectedRailCount = 0
         completedRailCount = 0
     }
-
     private val pendingRemovalWidgetIds = mutableSetOf<String>()
     private var expectedRailCount = 0
     private var completedRailCount = 0
-
     private val flushHandler = Handler(Looper.getMainLooper())
     private var flushRunnable: Runnable? = null
     private var safetyRunnable: Runnable? = null
-
     private val FLUSH_SAFETY_TIMEOUT_MS = 4000L
     private val FLUSH_DEBOUNCE_MS = 250L
-
     private val rowDiffCallback = object : DiffCallback<ListRow>() {
         override fun areItemsTheSame(
             oldItem: ListRow,
@@ -407,7 +353,6 @@ class ListFragment : RowsSupportFragment() {
         ): Boolean {
             return oldItem.contentDescription == newItem.contentDescription
         }
-
         override fun areContentsTheSame(
             oldItem: ListRow,
             newItem: ListRow
@@ -415,27 +360,23 @@ class ListFragment : RowsSupportFragment() {
             return true
         }
     }
-
     fun setExpectedRailCount(count: Int) {
         expectedRailCount = count
         completedRailCount = 0
         pendingRemovalWidgetIds.clear()
         cancelScheduledFlush()
     }
-
     private fun onRailResponseReceived(widgetId: String, isValid: Boolean) {
         completedRailCount++
         if (!isValid) {
             pendingRemovalWidgetIds.add(widgetId)
         }
-
         if (expectedRailCount > 0 && completedRailCount >= expectedRailCount) {
             flushPendingRemovals()
         } else if (pendingRemovalWidgetIds.isNotEmpty()) {
             scheduleDebouncedFlush()
         }
     }
-
     private fun scheduleDebouncedFlush() {
         flushRunnable?.let { flushHandler.removeCallbacks(it) }
         val runnable = Runnable { flushPendingRemovals() }
@@ -450,22 +391,18 @@ class ListFragment : RowsSupportFragment() {
             flushHandler.postDelayed(safety, FLUSH_SAFETY_TIMEOUT_MS)
         }
     }
-
     private fun cancelScheduledFlush() {
         flushRunnable?.let { flushHandler.removeCallbacks(it) }
         flushRunnable = null
         safetyRunnable?.let { flushHandler.removeCallbacks(it) }
         safetyRunnable = null
     }
-
     private fun flushPendingRemovals() {
         cancelScheduledFlush()
         if (pendingRemovalWidgetIds.isEmpty()) return
         if (!isAdded) return
-
         val idsToRemove = pendingRemovalWidgetIds.toSet()
         pendingRemovalWidgetIds.clear()
-
         val finalRows = ArrayList<ListRow>(rowsAdapter.size())
         for (i in 0 until rowsAdapter.size()) {
             val row = rowsAdapter.get(i) as? ListRow ?: continue
@@ -477,44 +414,34 @@ class ListFragment : RowsSupportFragment() {
                 finalRows.add(row)
             }
         }
-
         LogUtils.e(
             "removeEmptyRow678",
             "flushPendingRemovals: removed=${idsToRemove.size} remaining=${finalRows.size}"
         )
-
         @Suppress("UNCHECKED_CAST")
         rowsAdapter.setItems(finalRows as List<Any?>, rowDiffCallback as DiffCallback<Any?>)
     }
-
     fun updateRow(result: RailCommonData) {
         val widgetId = result.screenWidget?.Id ?: return
         val screenWidget = result.screenWidget ?: return
-
         val isTop10Invalid = screenWidget.top10Rails == true && result.assets.size < 10
         val isEmpty = result.assets.isEmpty()
-
         if (isTop10Invalid || isEmpty) {
             LogUtils.e("PredefinePlaylistType12345321", screenWidget.name ?: "")
             onRailResponseReceived(widgetId, isValid = false)
             return
         }
-
         val navigationInfoModel = hashMap[widgetId]
-
         if (navigationInfoModel != null) {
             val adapter = navigationInfoModel.assetsAdapter
             val existingCount = adapter.size()
             val newCount = result.assets.size
-
             if (screenWidget.predefPlaylistType == PredefinePlaylistType.AT_BYW.name || screenWidget.predefPlaylistType == PredefinePlaylistType.BYSL.name) {
                 LogUtils.e("PredefinePlaylistType12345321", screenWidget.name ?: "")
                 updateHeaderForWidget(widgetId, screenWidget.name ?: "")
             }
-
             result.assets.forEachIndexed { i, asset ->
                 asset.metas["PositionForRail"] = StringValue((i + 1).toString())
-
                 if (i < existingCount) {
                     adapter.replace(i, asset)
                 } else {
@@ -531,7 +458,6 @@ class ListFragment : RowsSupportFragment() {
             onRailResponseReceived(widgetId, isValid = true)
         }
     }
-
     private fun updateHeaderForWidget(widgetId: String, name: String) {
         val size = rowsAdapter.size()
         for (i in 0 until size) {
@@ -542,7 +468,6 @@ class ListFragment : RowsSupportFragment() {
             }
         }
     }
-
     private fun addNewRail(result: RailCommonData, screenWidget: BaseCategory, widgetId: String) {
         val positionForWidget = getPositionForAdapter(screenWidget)
         val arrayObjectAdapter = ArrayObjectAdapter(setUIData(result))
@@ -550,12 +475,10 @@ class ListFragment : RowsSupportFragment() {
             removeEmptyRow(screenWidget)
             return
         }
-
         result.assets.forEachIndexed { i, asset ->
             asset.metas["PositionForRail"] = StringValue((i + 1).toString())
             arrayObjectAdapter.add(asset)
         }
-
         val gridItemPresenterHeader = IconHeaderItem(
             0, screenWidget.name ?: "", screenWidget.widgetImageorLogo ?: ""
         )
@@ -569,25 +492,20 @@ class ListFragment : RowsSupportFragment() {
                 contentDescription = widgetId
             }
         }
-
         listRowPresenter.headerPresenter = IconHeaderItemPresenter()
         listRowPresenter.selectEffectEnabled = false
-
         if (positionForWidget <= rowsAdapter.size()) {
             rowsAdapter.add(positionForWidget, listRow)
         } else {
             rowsAdapter.add(listRow)
         }
-
         hashMap[widgetId] = NavigationInfoModel(
             arrayObjectAdapter, rowsAdapter.size() - 1, screenWidget, result
         )
     }
-
     private fun getPositionForAdapter(baseCategory: BaseCategory): Int {
         val entryList: List<Map.Entry<String, NavigationInfoModel>?> =
             ArrayList<Map.Entry<String, NavigationInfoModel>?>(hashMap.entries)
-
         Collections.sort<Map.Entry<String?, NavigationInfoModel?>?>(
             entryList,
             object : Comparator<Map.Entry<String?, NavigationInfoModel?>?> {
@@ -610,7 +528,6 @@ class ListFragment : RowsSupportFragment() {
         }
         return entryList.size
     }
-
     fun removeEmptyRow(baseCategory: BaseCategory) {
         LogUtils.e("removeEmptyRow678", "id: ${baseCategory.Id}")
         for (i in 0 until rowsAdapter.size()) {
@@ -624,9 +541,7 @@ class ListFragment : RowsSupportFragment() {
             }
         }
     }
-
     private val presenterCache = mutableMapOf<String, Presenter>()
-
     private fun setUIData(result: RailCommonData): Presenter {
         val railType = result.railType
         val screenWidget = result.screenWidget
@@ -638,17 +553,13 @@ class ListFragment : RowsSupportFragment() {
         val progressBarColor = screenWidget?.progressBarColor
         val isContinueWatching = screenWidget?.predefPlaylistType == "CON_W"
         val isBrandingHeader = screenWidget?.brandingHeader == true
-
         val isHero = isHeroCarousel(screenWidget)
         val cacheKey =
             "${railType}_${railCardSize}_${top10}_${autoPlay}_${autoPlayMode}_${isContinueWatching}_${isBrandingHeader}_${transparentBgColor}_${progressBarColor}_${screenWidget?.railCardType}_${isHero}"
         presenterCache[cacheKey]?.let { return it }
-
         val presenter = when (railType) {
             RailTypes.CAROUSEL_LDS_LANDSCAPE -> HeroCarouselCardPresenter(
                 result,
-                // On HOME screen the top hero carousel keeps the last focused card expanded (hero mode).
-                // On all other expandable rails (including 4th rail on HOME or MOVIES), the card collapses when focus leaves (rail mode).
                 keepExpandedWhenUnfocused = isHero
             )
             RailTypes.HORIZONTAL_LDS_LANDSCAPE -> {
@@ -658,14 +569,11 @@ class ListFragment : RowsSupportFragment() {
                     else -> LandScapeCardPresenter(result)
                 }
             }
-
             RailTypes.HORIZONTAL_CIR_CIRCLE -> CircleCardPresenter(result)
             RailTypes.HORIZONTAL_CIR_CIRCLE_TRANSPARENT ->
                 CircleTransparentCardPresenter(result, transparentBgColor ?: "")
-
             RailTypes.HORIZONTAL_SQR_SQUARE,
             RailTypes.HORIZONTAL_SQR_SQUARE_TRANSPARENT -> SquareMediumPresenter(result)
-
             RailTypes.HORIZONTAL_PR_POTRAIT_9x16 -> {
                 when {
                     top10 -> TopTenPortraitNineSixteenPresenter(result)
@@ -673,7 +581,6 @@ class ListFragment : RowsSupportFragment() {
                     else -> NineSixteenCardPresenter(result)
                 }
             }
-
             RailTypes.HORIZONTAL_PR_POSTER,
             RailTypes.HORIZONTAL_PR_POTRAIT -> {
                 when {
@@ -682,21 +589,17 @@ class ListFragment : RowsSupportFragment() {
                     else -> ItemPresenter(result)
                 }
             }
-
             RailTypes.HERO_LDS_BANNER -> HeroCardPresenter(result)
         }
-
         presenterCache[cacheKey] = presenter
         return presenter
     }
-
     fun appendData(newRails: List<RailCommonData>) {
         view?.post {
             if (!isAdded || context == null) return@post
             processAndAddRails(newRails)
         }
     }
-
     private fun processAndAddRails(newRails: List<RailCommonData>) {
         val visibleCount = 3
         val firstBatch = newRails.take(visibleCount)
@@ -708,16 +611,12 @@ class ListFragment : RowsSupportFragment() {
             }
         }
     }
-
     private fun buildAndAddRows(rails: List<RailCommonData>) {
         val newRows = mutableListOf<ListRow>()
         val userName = SharedPrefHelper.getInstance().getUserFirstName() ?: "You"
-
         rails.forEach { rail ->
             val arrayAdapter = ArrayObjectAdapter(setUIData(rail))
-            // Initialize every rail with 10 dummy skeleton items
             repeat(10) { arrayAdapter.add(CustomAsset().apply { Id = it }) }
-
             val headerText = if (rail.screenWidget?.predefPlaylistType == "CON_W") {
                 "${rail.screenWidget?.name} ${getString(R.string.for_text)} $userName"
             } else {
@@ -745,14 +644,11 @@ class ListFragment : RowsSupportFragment() {
         }
         rowsAdapter.addAll(rowsAdapter.size(), newRows)
     }
-
     private fun getItemPosition(row: Row, item: Any): Int =
         ((row as ListRow).adapter as ArrayObjectAdapter).indexOf(item)
-
     private val heroUpdateHandler = Handler(Looper.getMainLooper())
     private var pendingHeroUpdate: Runnable? = null
     private val HERO_UPDATE_DELAY = 200L
-
     inner class ItemViewSelectedListener : OnItemViewSelectedListener {
         override fun onItemSelected(
             itemViewHolder: Presenter.ViewHolder?,
@@ -767,10 +663,8 @@ class ListFragment : RowsSupportFragment() {
                 LogUtils.e("ListFragment", "railCommonData is null for key: $key")
                 return
             }
-
             val isCenter = isCenterStayRail(row, railCommonData)
             val alignmentPx = resources.getDimensionPixelSize(R.dimen.row_alignment_offset)
-
             if (isCenter) {
                 verticalGridView?.windowAlignmentOffsetPercent = 42f
                 verticalGridView?.windowAlignmentOffset = 0
@@ -780,7 +674,6 @@ class ListFragment : RowsSupportFragment() {
                 verticalGridView?.windowAlignmentOffset = if (isHeroCarousel(railCommonData.screenWidget)) 0 else alignmentPx
                 (activity as? MainActivity)?.clearGlobalBackdrop()
             }
-
             pendingHeroUpdate?.let { heroUpdateHandler.removeCallbacks(it) }
             pendingHeroUpdate = Runnable {
                 onItemInteractionListener?.onItemSelected1(
@@ -790,7 +683,6 @@ class ListFragment : RowsSupportFragment() {
             }.also { heroUpdateHandler.postDelayed(it, HERO_UPDATE_DELAY) }
         }
     }
-
     fun dpToPx(context: Context, dp: Float): Float {
         return TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_DIP,
@@ -798,7 +690,6 @@ class ListFragment : RowsSupportFragment() {
             context.resources.displayMetrics
         )
     }
-
     inner class ItemViewClickListener : OnItemViewClickedListener {
         override fun onItemClicked(
             vh: Presenter.ViewHolder?,
@@ -811,7 +702,6 @@ class ListFragment : RowsSupportFragment() {
             val key = rowItem.contentDescription?.toString() ?: return
             val rail = hashMap[key]?.railCommonData ?: return
             LogUtils.e("setupPersonalized1234", Gson().toJson(rail.screenWidget))
-
             onItemInteractionListener?.onItemClicked1(
                 vh,
                 item,
@@ -823,31 +713,25 @@ class ListFragment : RowsSupportFragment() {
             )
         }
     }
-
     override fun onDestroy() {
         rowsAdapter.clear()
         setOnItemViewClickedListener(null)
         setOnItemViewSelectedListener(null)
         super.onDestroy()
     }
-
     override fun onDestroyView() {
         view?.animate()?.cancel()
         view?.removeCallbacks(null)
         (view as? ViewGroup)?.removeAllViewsInLayout()
-
         rowsAdapter.clear()
         adapter = null
-
         presenterCache.clear()
         hashMap.clear()
         cancelScheduledFlush()
         pendingRemovalWidgetIds.clear()
-
         onItemInteractionListener = null
         setOnItemViewClickedListener(null)
         setOnItemViewSelectedListener(null)
-
         HeroCarouselRowPresenter.releasePlayer()
         HeroCarouselCardPresenter.releasePlayer()
         (activity as? MainActivity)?.clearGlobalBackdrop()

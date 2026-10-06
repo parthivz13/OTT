@@ -1,6 +1,5 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Deep obsidian frosted glass background with cinema grade readability -->
     <item>
         <shape android:shape="rectangle">
             <gradient
@@ -11,7 +10,6 @@
                 android:type="linear" />
         </shape>
     </item>
-    <!-- Subtle luminous neon rim glow on the right border -->
     <item
         android:left="-2dp"
         android:top="0dp"

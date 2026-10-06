@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
@@ -10,16 +10,12 @@
     android:clipToPadding="false"
     android:focusable="true"
     android:focusableInTouchMode="true">
-
-    <!-- 1. Giant Netflix-style 3D Outlined Rank Number -->
     <com.example.ott.ui.rows.top10.RankNumberView
         android:id="@+id/top10_rank_number"
         android:layout_width="85dp"
         android:layout_height="190dp"
         android:layout_gravity="bottom|start"
         android:layout_marginStart="0dp" />
-
-    <!-- 2. Overlapping Portrait Poster Card -->
     <androidx.cardview.widget.CardView
         android:id="@+id/top10_card_surface"
         android:layout_width="135dp"
@@ -29,27 +25,20 @@
         app:cardBackgroundColor="@color/hotstar_card_surface"
         app:cardCornerRadius="10dp"
         app:cardElevation="3dp">
-
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="match_parent">
-
-            <!-- Poster Artwork -->
             <ImageView
                 android:id="@+id/top10_image"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:contentDescription="@null"
                 android:scaleType="centerCrop" />
-
-            <!-- Bottom Gradient Scrim -->
             <View
                 android:layout_width="match_parent"
                 android:layout_height="80dp"
                 android:layout_gravity="bottom"
                 android:background="@drawable/card_bottom_scrim" />
-
-            <!-- Top-Left Red "TOP 10" Badge -->
             <TextView
                 android:id="@+id/top10_badge"
                 android:layout_width="wrap_content"
@@ -66,8 +55,6 @@
                 android:textSize="9sp"
                 android:textStyle="bold"
                 tools:ignore="SmallSp" />
-
-            <!-- Card Bottom Title -->
             <TextView
                 android:id="@+id/top10_title"
                 android:layout_width="match_parent"
@@ -87,8 +74,6 @@
                 android:textStyle="bold" />
         </FrameLayout>
     </androidx.cardview.widget.CardView>
-
-    <!-- 3. Rounded Focus Border (appears on focus) -->
     <View
         android:id="@+id/top10_focus_ring"
         android:layout_width="135dp"
@@ -98,5 +83,4 @@
         android:background="@drawable/top10_card_focus_ring"
         android:elevation="14dp"
         android:alpha="0" />
-
 </FrameLayout>

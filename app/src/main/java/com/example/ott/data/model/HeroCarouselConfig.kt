@@ -1,8 +1,4 @@
-package com.example.ott.data.model
-
-/**
- * Configuration for Hero Carousel auto-sliding and playback behavior.
- */
+﻿package com.example.ott.data.model
 data class HeroCarouselConfig(
     val rowId: String = "hero_carousel_main",
     val autoRotateEnabled: Boolean = true,

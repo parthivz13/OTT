@@ -1,13 +1,10 @@
-package com.example.ott.ui.rows.top10
-
+﻿package com.example.ott.ui.rows.top10
 import androidx.leanback.widget.ItemAlignmentFacet
 import androidx.leanback.widget.ListRowPresenter
-
 class Top10RowPresenter : ListRowPresenter() {
     init {
         shadowEnabled = false
         selectEffectEnabled = false
-
         val rowHeaderFacet = ItemAlignmentFacet().apply {
             alignmentDefs = arrayOf(
                 ItemAlignmentFacet.ItemAlignmentDef().apply {
