@@ -1,8 +1,12 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#0B0E14">
+    <com.example.ott.ui.browse.DynamicAmbientBackdropView
+        android:id="@+id/dynamic_ambient_backdrop"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
     <ImageView
         android:id="@+id/iv_global_backdrop"
         android:layout_width="match_parent"

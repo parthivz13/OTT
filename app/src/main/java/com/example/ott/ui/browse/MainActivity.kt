@@ -11,11 +11,24 @@ import com.example.ott.R
 import com.example.ott.sott.presenter.ListFragment
 import com.example.ott.sott.presenter.ScreenType
 import com.example.ott.ui.navigation.SideNavView
+import com.example.ott.util.PaletteColorExtractor
 class MainActivity : FragmentActivity() {
     private lateinit var sideNavView: SideNavView
     private var currentBackdropUrl: String? = null
     private val backdropImageView: ImageView? by lazy { findViewById(R.id.iv_global_backdrop) }
     private val backdropScrimView: View? by lazy { findViewById(R.id.view_backdrop_scrim) }
+    private val ambientBackdropView: DynamicAmbientBackdropView? by lazy { findViewById(R.id.dynamic_ambient_backdrop) }
+
+    fun updateAmbientColor(color: Int, animate: Boolean = true) {
+        ambientBackdropView?.setAmbientColor(color, animate)
+    }
+
+    fun updateAmbientColorFromImage(imageUrl: String?, fallbackId: Any? = null) {
+        PaletteColorExtractor.extractColorFromUrl(this, imageUrl, fallbackId) { color ->
+            updateAmbientColor(color)
+        }
+    }
+
     fun updateGlobalBackdrop(imageUrl: String?) {
         if (imageUrl.isNullOrEmpty()) {
             clearGlobalBackdrop()

@@ -359,6 +359,7 @@ class HeroCarouselRowPresenter(
                 if (holder.cardViews.isNotEmpty()) {
                     loadAsset(holder.cardViews[0], item, isFocused = true)
                     bindTextViews(holder, item)
+                    updateDynamicBackground(holder, item, animate = true)
                     stopTrailer(holder, resetAlpha = true)
                     scheduleTrailer(holder)
                 }
@@ -529,6 +530,7 @@ class HeroCarouselRowPresenter(
         v0.card.bringToFront()
         holder.card.bringToFront()
         bindTextViews(holder, activeItem)
+        updateDynamicBackground(holder, activeItem, animate = false)
         resetTrailerMode(holder, animateToNormal = false)
         renderDots(holder, totalCount, holder.selectedIndex)
         preloadUpcoming(holder, holder.selectedIndex)
@@ -696,6 +698,7 @@ class HeroCarouselRowPresenter(
         val activeItem = itemAt(holder, activeIndex)
         if (activeItem != null) {
             bindTextViews(holder, activeItem)
+            updateDynamicBackground(holder, activeItem, animate = true)
             resetTrailerMode(holder, animateToNormal = true)
         }
         renderDots(holder, totalCount, activeIndex)
@@ -887,6 +890,23 @@ class HeroCarouselRowPresenter(
             showBasicDetails = true
         )
     }
+    private fun updateDynamicBackground(holder: ViewHolder, item: Any?, animate: Boolean = true) {
+        if (item == null) return
+        val context = holder.stack.context
+        val asset = resolveAsset(context, item, isFocused = true) ?: return
+        val mainActivity = context as? com.example.ott.ui.browse.MainActivity
+            ?: com.example.ott.ui.browse.MainActivity.instance
+
+        val imageUrl = asset.imageUrl
+        com.example.ott.util.PaletteColorExtractor.extractColorFromUrl(
+            context,
+            imageUrl,
+            fallbackId = asset.id
+        ) { color ->
+            mainActivity?.updateAmbientColor(color, animate)
+        }
+    }
+
     private fun loadAsset(slotView: CardSlotView, item: Any?, isFocused: Boolean = false) {
         val asset = resolveAsset(slotView.card.context, item, isFocused)
         if (asset == null) {
@@ -897,9 +917,24 @@ class HeroCarouselRowPresenter(
         slotView.boundTitleId = asset.id
         val backdropUrl = asset.imageUrl
         if (backdropUrl == null) {
-            slotView.images.setColor(paletteColorFor(asset.id))
+            val color = com.example.ott.util.PaletteColorExtractor.DEFAULT_AMBIENT_COLOR
+            slotView.images.setColor(color)
+            if (isFocused) {
+                val mainActivity = slotView.card.context as? com.example.ott.ui.browse.MainActivity
+                    ?: com.example.ott.ui.browse.MainActivity.instance
+                mainActivity?.updateAmbientColor(color, true)
+            }
         } else {
-            slotView.images.load(backdropUrl, paletteColorFor(asset.id))
+            val cachedColor = com.example.ott.util.PaletteColorExtractor.getCachedColor(backdropUrl)
+                ?: com.example.ott.util.PaletteColorExtractor.DEFAULT_AMBIENT_COLOR
+            slotView.images.load(backdropUrl, cachedColor) { bitmap ->
+                if (isFocused && slotView.boundTitleId == asset.id) {
+                    val color = com.example.ott.util.PaletteColorExtractor.extractColorFromBitmap(bitmap, backdropUrl)
+                    val mainActivity = slotView.card.context as? com.example.ott.ui.browse.MainActivity
+                        ?: com.example.ott.ui.browse.MainActivity.instance
+                    mainActivity?.updateAmbientColor(color, true)
+                }
+            }
         }
     }
     private fun bindTextViews(holder: ViewHolder, item: Any?) {

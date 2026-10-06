@@ -25,7 +25,7 @@ class CrossfadeImagePair(container: FrameLayout, private val durationMs: Long = 
         container.addView(back, params)
         container.addView(front, params)
     }
-    fun load(url: String, placeholderColor: Int) {
+    fun load(url: String, placeholderColor: Int, onBitmapReady: ((android.graphics.Bitmap) -> Unit)? = null) {
         if (url == currentUrl) return
         currentUrl = url
         currentColor = null
@@ -61,6 +61,9 @@ class CrossfadeImagePair(container: FrameLayout, private val durationMs: Long = 
                     dataSource: DataSource,
                     isFirstResource: Boolean
                 ): Boolean {
+                    if (resource is android.graphics.drawable.BitmapDrawable) {
+                        onBitmapReady?.invoke(resource.bitmap)
+                    }
                     if (hasExistingContent) {
                         crossfade(incoming, outgoing)
                     } else {

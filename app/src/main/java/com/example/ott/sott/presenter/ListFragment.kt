@@ -1,4 +1,4 @@
-﻿package com.example.ott.sott.presenter
+package com.example.ott.sott.presenter
 import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Bundle
@@ -243,6 +243,7 @@ class ListFragment : RowsSupportFragment() {
             else -> null
         }
         (activity as? MainActivity)?.updateGlobalBackdrop(imageUrl)
+        (activity as? MainActivity)?.updateAmbientColorFromImage(imageUrl, fallbackId = item)
     }
     fun updateRowAlignment(hasBrandingLogo: Boolean, railCommonData: RailCommonData?) {
         val isCenter = isCenterStayRail(null, railCommonData)
